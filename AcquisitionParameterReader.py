@@ -34,7 +34,8 @@ class AcquisitionParameterReader:
     def translate_xml_to_h5(self,fn,h5):
         self.logger.info('Creating "config" group in h5 file.')
         h5.create_group('config')
-        h5['config'].create_dataset('filename',fn)
+
+        h5['config'].attrs['filename'] = fn
 
         fid = open(fn,'rb')
         soup = BeautifulSoup(fid.read(),"html.parser")
