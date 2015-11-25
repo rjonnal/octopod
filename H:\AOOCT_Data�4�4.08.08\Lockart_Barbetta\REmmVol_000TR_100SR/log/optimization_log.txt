@@ -1,0 +1,1 @@
+# Initializing logging to H:\AOOCT_Dataᓒ.08.08\Lockart_Barbetta\REmmVol_000TR_100SR/log/optimization_log.txt.
