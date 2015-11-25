@@ -1,4 +1,0 @@
-20151125100847	# Initializing logging to H:\AOOCT_Dataᓒ.08.08\Lockart_Barbetta\REmmVol_000TR_100SR/log/log.txt.
-20151125100847	local variable 'atts' referenced before assignment
-20151125100847	Using default attributes.
-20151125100847	Opening SFTP connection to 152.79.39.148:22.
