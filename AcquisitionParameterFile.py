@@ -24,7 +24,7 @@ class AcquisitionParameterFile:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Creating AcquisitionParameterReader.')
+        self.logger.info('Creating AcquisitionParameterFile object.')
 
     
     def translate_xml_to_h5(self,fn,h5):
@@ -51,7 +51,7 @@ class AcquisitionParameterFile:
                         sys.exit('Unrecoverable error: %s'%e)
 
 
-    def params_to_xml(self,fn,category_dict):
+    def params_to_xml(self,category_dict):
         """category_dict is a dictionary of dictionaries. Keys should be the headings
         'time','volume_size','scanning_parameters','dispersion_parameters', and the values should
         be dictionaries containing key:value pairs to be written as attributes of the
@@ -63,7 +63,7 @@ class AcquisitionParameterFile:
             attr_dict = category_dict[L1_key]
             guts = guts + '<%s '%L1_key
             for L2_key in attr_dict.keys():
-                guts = guts + '%s="%s\t'
+                guts = guts + '%s="%s\t'%(L2_key,attr_dict[L2_key])
             guts = guts + '/>'
         return head+guts+tail
     
