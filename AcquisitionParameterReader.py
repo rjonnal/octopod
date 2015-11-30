@@ -3,7 +3,6 @@ import h5py,os,sys
 from bs4 import BeautifulSoup
 from datetime import datetime
 import logging
-
 logging.basicConfig(level=logging.INFO)
 
 
@@ -27,7 +26,7 @@ class AcquisitionParameterReader:
     xml_dict['c3'] = ('dispersion_c3',float)
     
     def __init__(self):
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(__name__)
         self.logger.info('Creating AcquisitionParameterReader.')
 
     
