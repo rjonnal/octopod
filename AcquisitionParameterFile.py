@@ -35,7 +35,7 @@ class AcquisitionParameterFile:
 
         fid = open(fn,'rb')
         soup = BeautifulSoup(fid.read(),"html.parser")
-        headings = ['time','scanning_parameters','dispersion_parameters']
+        headings = ['time','volume_size','scanning_parameters','dispersion_parameters']
         for heading in headings:
             xml_list = soup.findAll(heading)
             for xml in xml_list:
@@ -51,9 +51,9 @@ class AcquisitionParameterFile:
                         sys.exit('Unrecoverable error: %s'%e)
 
 
-    def write_params_to_xml(self,fn,category_dict):
+    def params_to_xml(self,fn,category_dict):
         """category_dict is a dictionary of dictionaries. Keys should be the headings
-        'time','scanning_parameters','dispersion_parameters', and the values should
+        'time','volume_size','scanning_parameters','dispersion_parameters', and the values should
         be dictionaries containing key:value pairs to be written as attributes of the
         category's XML tag."""
         head = '<?xml version="1.0" encoding="utf-8"?>\n<MonsterList>\n\t<Monster>\n'
