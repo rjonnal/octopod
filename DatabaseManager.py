@@ -1,7 +1,5 @@
 import pymongo
 import logging
-logging.basicConfig(level=logging.INFO)
-
 import octopod_config as ocfg
 
 class Database:

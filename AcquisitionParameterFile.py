@@ -3,11 +3,8 @@ import h5py,os,sys
 from bs4 import BeautifulSoup
 from datetime import datetime
 import logging
-logging.basicConfig(level=logging.INFO)
 
-
-class AcquisitionParameterReader:
-
+class AcquisitionParameterFile:
     
     xml_dict = {}
 
@@ -52,7 +49,24 @@ class AcquisitionParameterReader:
                     except Exception as e:
                         self.logger.error(e)
                         sys.exit('Unrecoverable error: %s'%e)
-                        
+
+
+    def write_params_to_xml(self,fn,category_dict):
+        """category_dict is a dictionary of dictionaries. Keys should be the headings
+        'time','scanning_parameters','dispersion_parameters', and the values should
+        be dictionaries containing key:value pairs to be written as attributes of the
+        category's XML tag."""
+        head = '<?xml version="1.0" encoding="utf-8"?>\n<MonsterList>\n\t<Monster>\n'
+        tail = '\t<\Monster>\n<\MonsterList>'
+        guts = ''
+        for L1_key in category_dict.keys():
+            attr_dict = category_dict[L1_key]
+            guts = guts + '<%s '%L1_key
+            for L2_key in attr_dict.keys():
+                guts = guts + '%s="%s\t'
+            guts = guts + '/>'
+        return head+guts+tail
+    
 if __name__=='__main__':
     apfn = os.path.join('testing','2015-11-17-16-21-01-RE_3TR_0SR_20def_1.xml')
     f = h5py.File('./testing/foo.hdf5','w')
