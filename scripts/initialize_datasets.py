@@ -4,9 +4,9 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 fm = FileManager()
-files = fm.get('hroct')
+system_label = 'hroct'
+files = fm.get(system_label)
 
 for fn in files:
     d = Dataset(fn)
-    d.initialize()
-    sys.exit()
+    d.initialize(system_label)

@@ -19,11 +19,13 @@ class Dataset:
         self.h5fn = raw_temp + '.hdf5'
         self.xml_fn = raw_temp + '.xml'
 
+        
+
 
     def get_h5_handle(self):
         return h5py.File(self.h5fn)
     
-    def initialize(self):
+    def initialize(self,system_label):
 
         self.h5 = h5py.File(self.h5fn)
 
@@ -52,6 +54,15 @@ class Dataset:
                 vol = vol.reshape(n_slow,n_fast,n_depth)
                 self.h5['raw_data'][vol_index,:,:,:] = vol
 
+        L0 = ocfg.source_spectra[system_label]['L0']
+        dL = ocfg.source_spectra[system_label]['dL']
+        self.L = np.arange(n_depth)*dL+L0
+        self.k_in = (2.0*np.pi)/self.L
+        self.k_out = np.linspace(self.k_in[0],self.k_in[-1],n_depth)
+        self.h5['L'] = self.L
+        self.h5['k_in'] = self.k_in
+        self.h5['k_out'] = self.k_out
+        self.h5['system_label'] = system_label
         self.h5.close()
                 
     def delete_h5(self):
