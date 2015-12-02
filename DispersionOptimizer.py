@@ -56,11 +56,12 @@ class DispersionOptimizer:
         print c_sub,
         c_all = [c_sub[0],c_sub[1],0.0,0.0]
         frame = np.abs(self.process_frame(test_frame,c_all))
-        out =  1.0/np.max(frame**2)
+        colmax = np.max(frame**2,axis=0)
+        out =  1.0/np.mean(colmax)
         print out
         return out
 
-    def get(self,test_frame):
+    def optimize(self,test_frame):
         obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub)
         c_sub0 = [0.0,0.0]
         bounds3 = [c_sub0[0]-2e-16,c_sub0[0]+2e-16]
@@ -68,24 +69,24 @@ class DispersionOptimizer:
         
         result = optimize.brute(obj,(bounds3,bounds2),Ns=41,finish=None)
         
-        
         bounds3a = (result[0]-1e-17,result[0]+1e-17)
         bounds2a = (result[1]-1e-11,result[1]+1e-11)
         result = optimize.brute(obj,(bounds3a,bounds2a),Ns=11,finish=None)
         
         c = [result[0],result[1],0.0,0.0]
+        objective_value = obj(result)
+        
+        self.h5.require_group('dispersion')
+        self.h5overwrite('dispersion/coefficients',np.array(c))
+        self.h5overwrite('dispersion/objective_value',objective_value)
+        self.h5overwrite('dispersion/bounds3',np.array(bounds3))
+        self.h5overwrite('dispersion/bounds2',np.array(bounds2))
+        
         return c
-    #         elif method=='brute':
-#             posttemp = result
-#         else:
-#             sys.exit('Please provide an optimization method.')
-
-#         postcoef[0] = posttemp[0]
-#         postcoef[1] = posttemp[1]
-
-#         self.plotOptLog()
-#         self.log.log('optimization time elapsed: %f'%t_elapsed)
-#         self.optlog.log('# optimization time elapsed: %f'%t_elapsed)
-#         self.showDispersionCompensation(coefs=postcoef,showPlot=False)
-#         return postcoef
     
+    def h5overwrite(self,key,value):
+        try:
+            del self.h5[key]
+        except Exception as e:
+            pass
+        self.h5[key] = value

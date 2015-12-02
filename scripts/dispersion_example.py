@@ -4,29 +4,17 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 fm = FileManager()
-fn = fm.get_one('hroct',['carmen','line_1'])
+files = fm.get('hroct')
 
-d = Dataset(fn)
-h5 = d.get_h5_handle()
+for fn in files:
+    print fn
+    d = Dataset(fn)
+    h5 = d.get_h5_handle()
 
-dccoefs = [0.0,0.0,0.0,0.0]
-do = DispersionOptimizer(h5)
-inf = h5['raw_data'][0][0]
-outf1 = do.process_frame(inf,[0.0,0.0,0.0,0.0])
-outf2 = do.process_frame(inf,[-4.5999999999999996e-17, -1.1999999999999991e-11, 0.0, 0.0])
+    do = DispersionOptimizer(h5)
+    #tf = do.make_test_frame(2000)
+    tf = h5['raw_data'][0][10:25:5]
+    tf = np.reshape(tf,(3000,2048))
+    dccoef = do.optimize(tf)
+    h5.close()
 
-plt.figure()
-plt.imshow(np.abs(outf1[700:900,:200]))
-plt.colorbar()
-plt.figure()
-plt.imshow(np.abs(outf2[700:900,:200]))
-plt.colorbar()
-plt.show()
-
-
-sys.exit()
-tf = do.make_test_frame(50)
-dccoef = do.get(tf)
-h5.close()
-
-print dccoef
