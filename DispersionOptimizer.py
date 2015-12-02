@@ -2,15 +2,37 @@ import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
 from scipy import interpolate,optimize
-
+import octopod_config as ocfg
+import logging
 
 class DispersionOptimizer:
 
     def __init__(self,h5):
         self.h5 = h5
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Creating DispersionOptimizer object.')
 
-    def process_frame(self,c):
-        test_frame = self.h5['raw_data'][0][20]
+    def make_test_frame(self,size=100):
+        self.logger.info('Generating a random test frame from raw data.')
+        n_depth = self.h5['/config/n_depth'][()]
+        n_fast = self.h5['/config/n_fast'][()]
+        n_slow = self.h5['/config/n_slow'][()]
+        n_vol = self.h5['/config/n_vol'][()]
+
+        test_frame = np.zeros((size,n_depth))
+        hypercube = np.zeros(self.h5['raw_data'].shape)
+        hypercube[...] = self.h5['raw_data']
+        for k in range(size):
+            v = np.random.randint(n_vol)
+            s = np.random.randint(n_slow)
+            f = np.random.randint(n_fast)
+            test_frame[k,:] = hypercube[v][s][f][:]
+        del hypercube
+        return test_frame
+        
+        
+    def process_frame(self,frame,c):
+        test_frame = frame.copy()
         test_frame = test_frame - np.mean(test_frame,axis=0)
         test_frame = test_frame.T
         k_in = self.h5['k_in']
@@ -22,70 +44,38 @@ class DispersionOptimizer:
         phase = np.exp(1j*np.polyval(c,dispersion_axis))
         test_frame = test_frame * phase[None].T
         test_frame = np.fft.fftshift(np.fft.fft(test_frame,axis=0),axes=0)
-        imh = plt.imshow(np.abs(test_frame))
-        imh.set_clim((1e3,1e5))
-        plt.colorbar()
-        plt.show()
-                       
+
+        n_depth = self.h5['/config/n_depth'][()]
+        test_frame = test_frame[:n_depth/2,:]
+        cutoff = ocfg.dc_cutoff
+        test_frame = test_frame[:-cutoff,:]
         
-#     def dispersion_objective(self,test_frame,c):
+        return test_frame
+        
+    def dispersion_objective(self,test_frame,c_sub):
+        print c_sub,
+        c_all = [c_sub[0],c_sub[1],0.0,0.0]
+        frame = np.abs(self.process_frame(test_frame,c_all))
+        out =  1.0/np.max(frame**2)
+        print out
+        return out
+
+    def get(self,test_frame):
+        obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub)
+        c_sub0 = [0.0,0.0]
+        bounds3 = [c_sub0[0]-2e-16,c_sub0[0]+2e-16]
+        bounds2 = [c_sub0[1]-2e-10,c_sub0[1]+2e-10]
+        
+        result = optimize.brute(obj,(bounds3,bounds2),Ns=41,finish=None)
         
         
-#     def get(self,test_frame):
-#         test_frame = self.makeTestFrame(N,width)
+        bounds3a = (result[0]-1e-17,result[0]+1e-17)
+        bounds2a = (result[1]-1e-11,result[1]+1e-11)
+        result = optimize.brute(obj,(bounds3a,bounds2a),Ns=11,finish=None)
         
-#         obj = lambda c: self.dispersionObjective(test_frame,c,plot=plot)
-
-# #        self.log.log('Getting initial values for optimization from...')
-# #        c0 = self.readGlobalDispersionCoefs(self.isNfl)
-# #        if c0 is None:
-# #            c0 = self.dispersionCoefs[:2]
-
-#         c0 = [0.0,0.0]
-
-#         precoef = [0.,0.,0.,0.]
-#         postcoef = [0.,0.,0.,0.]
-
-#         #lowers = ocfg.DISPERSION_COEFS_LBOUNDS[:2]
-#         #uppers = ocfg.DISPERSION_COEFS_UBOUNDS[:2]
-#         lowers = [c0[0]-2e-16,c0[1]-2e-10]
-#         uppers = [c0[0]+2e-16,c0[1]+2e-10]
-        
-#         bounds3 = (lowers[0],uppers[0])
-#         bounds2 = (lowers[1],uppers[1])
-
-
-#         if plot:
-#             plt.figure()
-
-#         t0 = time()
-#         self.log.log('optimization start')
-#         self.optlog.log('# optimization start')
-#         self.optlog.log('# starting with coefs %0.3e,%0.3e'%(c0[0],c0[1]))
-#         self.optlog.log('# order3\torder2\t\tmetric')
-
-
-#         method='brute'
-
-#         if method=='brute':
-#             result = optimize.brute(obj,(bounds3,bounds2),Ns=41,finish=None)
-#             bounds3a = (result[0]-1e-17,result[0]+1e-17)
-#             bounds2a = (result[1]-1e-11,result[1]+1e-11)
-#             result = optimize.brute(obj,(bounds3a,bounds2a),Ns=11,finish=None)
-#         elif method=='anneal':
-#             result = optimize.anneal(obj,x0=c0,schedule='fast',lower=lowers,upper=uppers,maxeval=None)
-#         else:
-#             sys.exit('Please provide an optimization method.')
-            
-#         t_elapsed = time() - t0
-
-#         if plot:
-#             plt.ioff()
-#             plt.close()
-
-#         if method=='anneal':
-#             posttemp = result[0]
-#         elif method=='brute':
+        c = [result[0],result[1],0.0,0.0]
+        return c
+    #         elif method=='brute':
 #             posttemp = result
 #         else:
 #             sys.exit('Please provide an optimization method.')

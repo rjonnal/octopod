@@ -15,3 +15,4 @@ raw_bytes_per_pixel = 2
 source_spectra = {}
 source_spectra['hroct'] = {'L0':801e-9,'dL':6.2e-11}
 
+dc_cutoff = 20
