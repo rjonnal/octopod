@@ -10,3 +10,4 @@ data_paths['hroct'] = '/home/rjonnal/data/Dropbox/Share/hroct_data'
 db_file = '/home/rjonnal/db/octopod.db'
 
 raw_data_extension = 'unp'
+raw_bytes_per_pixel = 2

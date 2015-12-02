@@ -29,7 +29,7 @@ class AcquisitionParameterFile:
     
     def translate_xml_to_h5(self,fn,h5):
         self.logger.info('Creating "config" group in h5 file.')
-        h5.create_group('config')
+        h5.require_group('config')
 
         h5['config'].attrs['filename'] = fn
 
@@ -44,6 +44,10 @@ class AcquisitionParameterFile:
                     try:
                         h5key,op = self.xml_dict[key]
                         h5val = op(xml.attrs[key])
+                        try:
+                            del h5['config'][h5key]
+                        except Exception as e:
+                            pass
                         h5['config'].create_dataset(h5key,data=h5val)
                         self.logger.info('Setting variable %s to %s.'%(h5key,h5val))
                     except Exception as e:
@@ -57,15 +61,42 @@ class AcquisitionParameterFile:
         be dictionaries containing key:value pairs to be written as attributes of the
         category's XML tag."""
         head = '<?xml version="1.0" encoding="utf-8"?>\n<MonsterList>\n\t<Monster>\n'
-        tail = '\t<\Monster>\n<\MonsterList>'
+        tail = '\n\t<\Monster>\n<\MonsterList>'
         guts = ''
         for L1_key in category_dict.keys():
             attr_dict = category_dict[L1_key]
-            guts = guts + '<%s '%L1_key
+            guts = guts + '\n\t\t<%s '%L1_key
             for L2_key in attr_dict.keys():
-                guts = guts + '%s="%s\t'%(L2_key,attr_dict[L2_key])
+                guts = guts + '%s="%s" '%(L2_key,attr_dict[L2_key])
             guts = guts + '/>'
-        return head+guts+tail
+        out = head+guts+tail
+        self.logger.info('Generating XML: %s'%out.replace('\n',' '))
+        return out
+
+    def make_xml_file(self,data_filename,n_depth=2048,n_fast=1000,n_slow=100,n_vol=1):
+        """This method generates Yifan-style XML files for bioptigen data sets."""
+        timestamp = datetime.fromtimestamp(os.path.getmtime(data_filename)).strftime('%m/%d/%Y %I:%M:%S %p')
+        head,tail = os.path.splitext(data_filename)
+        out_filename = head + '.xml'
+        if os.path.exists(out_filename):
+            self.logger.error('Cannot overwrite %s. Please delete manually. Exiting.'%out_filename)
+            sys.exit()
+        test = {}
+        test['time']={'Data_Acquired_at':timestamp}
+        test['volume_size']={'width':'%d'%n_depth,'height':'%d'%n_fast,'number_of_frames':'%d'%n_slow,'number_of_volumes':'%d'%n_vol}
+        test['scanning_parameters']={'x_scan_range':'3168','x_scan_offset':'0','y_scan_range':'2112','y_scan_offset':'0','number_of_bm_scans':'1'}
+        test['dispersion_parameters']={'c2':'0.0','c3':'0.0'}
+        # perform a sanity check on file size
+        bytecount = os.stat(data_filename).st_size
+        expected_bytecount = int(test['volume_size']['width'])*int(test['volume_size']['height'])*int(test['volume_size']['number_of_frames'])*int(test['volume_size']['number_of_volumes'])*2
+        if not bytecount==expected_bytecount:
+            self.logger.error('Computed bytecount and expected bytecount for %s do not agree. Exiting.'%data_filename)
+            sys.exit()
+        with open(out_filename,'w') as fid:
+            fid.write(self.params_to_xml(test))
+        
+            
+            
     
 if __name__=='__main__':
     apfn = os.path.join('testing','2015-11-17-16-21-01-RE_3TR_0SR_20def_1.xml')

@@ -4,8 +4,10 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 fm = FileManager()
-fn = fm.get_one('hroct',['carmen','line_3'])
-ds = Dataset(fn)
+files = fm.get('hroct')
 
 acf = AcquisitionParameterFile()
-acf.make_xml_file(fn)
+for fn in files:
+    acf.make_xml_file(fn)
+
+

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MonsterList>
+	<Monster>
+
+		<volume_size width="2048" number_of_frames="500" number_of_volumes="1" height="400" />
+		<scanning_parameters x_scan_range="3168" x_scan_offset="0" y_scan_range="2112" y_scan_offset="0" number_of_bm_scans="1" />
+		<dispersion_parameters c3="0" c2="1.35e-5" />
+		<time Data_Acquired_at="11/17/2015 4:21:01 PM" />
+	<\Monster>
+<\MonsterList>
