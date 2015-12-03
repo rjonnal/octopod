@@ -9,7 +9,7 @@ files = fm.get('hroct')
 for fn in files:
     d = Dataset(fn)
     h5 = d.get_h5_handle()
-    p = Processor(h5)
+    p = OCTProcessor(h5)
     p.cleanup()
     p.run()
     h5.close()

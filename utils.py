@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import interp1d
 from scipy.signal import fftconvolve
 import sys
-from scipy.misc import imread,factorial
+#from scipy.misc import imread,factorial
 from glob import glob
 import sys,os
 import numpy as np
@@ -126,7 +126,7 @@ def gaussian_projection(vol,depth,sigma):
     return np.mean(vol*g,axis=2)
 
 
-def nxcorr2(self,im1,im2,plot=False):
+def nxcorr2(im1,im2,plot=False):
     sy1,sx1 = im1.shape
     sy2,sx2 = im2.shape
 
@@ -146,7 +146,6 @@ def nxcorr2(self,im1,im2,plot=False):
 
     nxcval = np.real(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(temp1)*np.conj(np.fft.fft2(temp2)))))
 
-
     if plot:
         plt.subplot(3,2,2)
         plt.cla()
@@ -163,7 +162,7 @@ def nxcorr2(self,im1,im2,plot=False):
         plt.plot(maxprof)
         maxidx = np.argmax(maxprof)
         plt.plot(maxidx,maxprof[maxidx],'ks')
-        plt.draw()
+        plt.show()()
 
     peakVal = np.max(nxcval)
     peakIdx = np.where(nxcval==peakVal)
