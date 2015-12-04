@@ -16,6 +16,40 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import curve_fit
 
 
+def autotrim_bscan(b):
+    ab = np.abs(b)
+    ab[-20:,:] = 0.0
+    noise_rms = np.std(np.ravel(ab[:20,:]))
+    ax_prof = np.mean(ab,axis=1)
+    thresh = np.min(ax_prof)+3*noise_rms
+    valid = np.where(ax_prof>thresh)[0]
+    z1 = valid[0]
+    z2 = valid[-1]
+    return b[z1:z2,:],z1,z2
+
+def translation(im0, im1,xlims=None,ylims=None):
+    """Return translation vector to register two images
+    of equal size. Returns a 3-tuple (translation_x,translation_y,correlation)."""
+    shape = im0.shape
+    f0 = np.fft.fft2(im0)
+    f1 = np.fft.fft2(im1)
+    ir = abs(np.fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1))))
+    goodness = np.max(ir)
+    ty, tx = np.unravel_index(np.argmax(ir), shape)
+    debug = False
+    if debug:
+        print tx,ty,goodness
+        plt.imshow(ir,interpolation='none')
+        plt.colorbar()
+        plt.autoscale(False)
+        plt.plot(tx,ty,'ws')
+        plt.show()
+    if ty > shape[0] // 2:
+        ty -= shape[0]
+    if tx > shape[1] // 2:
+        tx -= shape[1]
+    return (tx, ty, goodness)
+
 def find_peaks(prof,intensity_threshold=-np.inf):
     left = prof[:-2]
     center = prof[1:-1]

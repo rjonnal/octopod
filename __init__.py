@@ -10,3 +10,4 @@ from FileManager import *
 from Processor import *
 from DispersionOptimizer import *
 import utils
+from movie import *

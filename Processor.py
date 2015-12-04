@@ -4,6 +4,7 @@ import logging
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
+from utils import translation,autotrim_bscan
 
 class Processor:
     """An interface for a data processing class. Classes which
@@ -77,3 +78,53 @@ class OCTProcessor(Processor):
         self.h5.create_dataset(self.post_dataset,data=out_block,dtype='c8')
         plt.imshow(np.abs(self.h5['processed_data'][0][10]))
         plt.show()
+
+class CoarseRegistrationProcessorUnfinished(Processor):
+    def __init__(self,h5):
+        Processor.__init__(self,h5,pre_dataset='/processed_data',post_dataset='/registration/coarse_coordinates')
+        try:
+            self.h5.create_group('registration')
+        except Exception as e:
+            pass
+    
+    def run(self):
+        if False:# testing
+            temp = np.random.rand(100,100)
+            t1 = temp[:80,:80]
+            t2 = temp[20:,20:]
+            print translation(t1,t2)
+            sys.exit()
+
+        
+        n_vol,n_slow,n_fast,n_depth = self.h5[self.pre_dataset].shape
+        def test(idx1,idx2,tx,ty,goodness):
+            d = np.sqrt(tx**2+ty**2)
+            return d<(20*(idx2-idx1)) and goodness>.01
+        if os.path.exists('temp.npy'):
+            reg_data = np.load('temp.npy')
+        else:
+            reg_data = []
+            for v in range(n_vol):
+                idx1 = 0
+                idx2 = 1
+                while idx2<n_slow:
+                    f1 = np.abs(self.h5['processed_data'][v][idx1])
+                    f2 = np.abs(self.h5['processed_data'][v][idx2])
+                    tx,ty,goodness = translation(f1,f2)
+                    if test(idx1,idx2,tx,ty,goodness):
+                        reg_data.append([idx1,idx2,tx,ty,goodness])
+                        idx1 = idx2
+                        idx2 = idx2+1
+                    else:
+                        idx2 = idx2+1
+                    print idx1,idx2,tx,ty,goodness
+            np.save('temp.npy',reg_data)
+
+        reg_data = np.array(reg_data)
+        print reg_data
+        plt.plot(reg_data[:,2])
+        plt.plot(reg_data[:,3])
+        plt.plot(reg_data[:,4]*1000)
+        plt.show()
+        sys.exit()
+        

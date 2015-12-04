@@ -19,9 +19,19 @@ class FileManager:
                     self.files[key].append(full_fn)
                     self.logger.info('Adding %s to set %s.'%(full_fn,key))
 
-    def get(self,key):
+    def get(self,key,terms=[]):
         try:
-            return self.files[key]
+            files = self.files[key]
+            if len(terms):
+                out = []
+                for f in files:
+                    for term in terms:
+                        if f.lower().find(term.lower())>-1:
+                            out.append(f)
+            else:
+                out = files
+            return out
+                        
         except KeyError as e:
             self.logger.info('KeyError: "%s". Returning [].'%(e.message))
             return []
