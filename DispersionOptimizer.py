@@ -64,10 +64,10 @@ class DispersionOptimizer:
     def optimize(self,test_frame):
         obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub)
         c_sub0 = [0.0,0.0]
-        bounds3 = [c_sub0[0]-2e-16,c_sub0[0]+2e-16]
-        bounds2 = [c_sub0[1]-2e-10,c_sub0[1]+2e-10]
+        bounds3 = [c_sub0[0]-1e-16,c_sub0[0]+1e-16]
+        bounds2 = [c_sub0[1]-1e-10,c_sub0[1]+1e-10]
         
-        result = optimize.brute(obj,(bounds3,bounds2),Ns=41,finish=None)
+        result = optimize.brute(obj,(bounds3,bounds2),Ns=11,finish=None)
         
         bounds3a = (result[0]-1e-17,result[0]+1e-17)
         bounds2a = (result[1]-1e-11,result[1]+1e-11)

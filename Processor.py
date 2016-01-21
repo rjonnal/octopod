@@ -63,6 +63,7 @@ class OCTProcessor(Processor):
             for s in range(n_slow):
                 print s
                 frame = self.h5['raw_data'][v][s]
+                frame[0,:] = frame[1,:]
                 test_frame = frame - np.mean(frame,axis=0)
                 test_frame = test_frame.T
                 k_interpolator = sp.interpolate.interp1d(self.k_in,test_frame,axis=0,copy=False)
@@ -77,7 +78,7 @@ class OCTProcessor(Processor):
 
         self.h5.create_dataset(self.post_dataset,data=out_block,dtype='c8')
         plt.imshow(np.abs(self.h5['processed_data'][0][10]))
-        plt.show()
+        plt.pause(1)
 
 class CoarseRegistrationProcessorUnfinished(Processor):
     def __init__(self,h5):

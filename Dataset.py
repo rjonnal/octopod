@@ -27,14 +27,12 @@ class Dataset:
     
     def initialize(self,system_label):
 
-        self.h5 = h5py.File(self.h5fn)
+        self.h5 = h5py.File(self.h5fn,'w')
 
         # write parameters from the XML file to the h5 file
         apf = AcquisitionParameterFile()
         apf.translate_xml_to_h5(self.xml_fn,self.h5)
-
         
-        # write the data from the raw data file to the h5 file
         n_vol = self.h5['/config/n_vol'][()]
         n_slow = self.h5['/config/n_slow'][()]
         n_fast = self.h5['/config/n_fast'][()]
@@ -59,10 +57,12 @@ class Dataset:
         self.L = np.arange(n_depth)*dL+L0
         self.k_in = (2.0*np.pi)/self.L
         self.k_out = np.linspace(self.k_in[0],self.k_in[-1],n_depth)
-        self.h5['L'] = self.L
-        self.h5['k_in'] = self.k_in
-        self.h5['k_out'] = self.k_out
-        self.h5['system_label'] = system_label
+
+        self.h5overwrite('L',self.L)
+        self.h5overwrite('k_in',self.k_in)
+        self.h5overwrite('k_out',self.k_out)
+        self.h5overwrite('system_label',system_label)
+
         self.h5.close()
                 
     def delete_h5(self):
@@ -72,3 +72,10 @@ class Dataset:
                 os.remove(self.h5fn)
             except Exception as e:
                 self.logger.info(e.message)
+
+    def h5overwrite(self,key,value):
+        try:
+            del self.h5[key]
+        except:
+            pass
+        self.h5.create_dataset(key,data=value)
