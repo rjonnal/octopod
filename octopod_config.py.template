@@ -4,8 +4,7 @@
 # the processing steps.
 data_paths = {}
 #data_paths['2g_aooct'] = 'D:/rjonnal/Dropbox/Share/2g_aooct_data/Data/'
-data_paths['2g_aooct'] = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data'
-data_paths['hroct'] = '/home/rjonnal/data/Dropbox/Share/hroct_data/Data'
+data_paths['2g_aooct'] = 'D:/Data/'
 
 db_file = '/home/rjonnal/db/octopod.db'
 
