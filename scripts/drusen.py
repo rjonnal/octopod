@@ -19,7 +19,7 @@ def test_nxcorr2():
 def label_druse_across_sets(subject_name):
     files = fm.get('hroct')
     files = [f for f in files if f.find(subject_name)>-1]
-
+    
     druse_id = None
     for fn in files[::-1]:
         d = Dataset(fn)
@@ -187,7 +187,7 @@ def track_druse_through_set(filename,druse_id,border=20):
     h5['drusen'][druse_id].create_dataset('tracking',data=np.array(out))
         
         
-#label_druse_across_sets('Edric')
+label_druse_across_sets('Edric')
 
 carmen_ids = ['1_deg_nasal','0p5_deg_temporal','2_deg_temporal','5_deg_temporal']
 edric_ids = ['0p5_deg_nasal','5_deg_temporal']
