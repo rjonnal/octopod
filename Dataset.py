@@ -19,9 +19,6 @@ class Dataset:
         self.h5fn = raw_temp + '.hdf5'
         self.xml_fn = raw_temp + '.xml'
 
-        
-
-
     def get_h5_handle(self):
         return h5py.File(self.h5fn)
     
