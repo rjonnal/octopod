@@ -6,7 +6,11 @@ import sys,os
 
 system_label = '2g_aooct'
 fm = FileManager()
-files = fm.get(system_label,['resolution_test_target'])
+
+files = fm.get(system_label,['2016.01.29'])
+print files
+sys.exit()
+
 
 for fn in files:
     d = Dataset(fn)
