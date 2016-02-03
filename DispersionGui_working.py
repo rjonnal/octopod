@@ -1,9 +1,9 @@
 import sys,os
 from PySide import QtGui, QtCore
-import OCTTools
+from octopod import *
 import numpy as np
 from matplotlib import pyplot as plt
-import octtools_config
+import octopod_config
 
 
 class PictureLabel(QtGui.QLabel):
@@ -150,7 +150,7 @@ class ProcessingWindow(QtGui.QWidget):
         self.setGeometry(30,30,1000,800)
         self.scaleFactor = 1.0
         self.infoLabel.setText(self.getInfoString())
-        self.path = octtools_config.DATA_ROOTS[0]
+        self.path = octopod_config.data_paths.values[0]
         self.show()
         self.update(True)
 
@@ -193,10 +193,10 @@ class ProcessingWindow(QtGui.QWidget):
 
     def showDialog(self,path=None):
         if path is None:
-            path = octtools_config.DATA_ROOTS[0]
+            path = octopod_config.data_paths.values()[0]
         
         fname, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file',
-                    path,'*.unp')
+                    path,'*.hdf5')
         path,f = os.path.split(fname)
         self.path = path
         return OCTTools.Processor(fname,True)

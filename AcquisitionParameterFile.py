@@ -1,4 +1,3 @@
-import octtools_config as ocfg
 import h5py,os,sys
 from bs4 import BeautifulSoup
 from datetime import datetime

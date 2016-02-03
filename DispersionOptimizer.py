@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 from scipy import interpolate,optimize
 import octopod_config as ocfg
 import logging
+from octopod.Processor import process
 
 class DispersionOptimizer:
 
@@ -33,23 +34,9 @@ class DispersionOptimizer:
         
     def process_frame(self,frame,c):
         test_frame = frame.copy()
-        test_frame = test_frame - np.mean(test_frame,axis=0)
-        test_frame = test_frame.T
         k_in = self.h5['k_in']
         k_out = self.h5['k_out']
-        k_interpolator = interpolate.interp1d(k_in,test_frame,axis=0,copy=False)
-        test_frame = k_interpolator(k_out)
-        
-        dispersion_axis = k_out - np.mean(k_out)
-        phase = np.exp(1j*np.polyval(c,dispersion_axis))
-        test_frame = test_frame * phase[None].T
-        test_frame = np.fft.fftshift(np.fft.fft(test_frame,axis=0),axes=0)
-
-        n_depth = self.h5['/config/n_depth'][()]
-        test_frame = test_frame[:n_depth/2,:]
-        cutoff = ocfg.dc_cutoff
-        test_frame = test_frame[:-cutoff,:]
-        
+        test_frame = process(frame,k_in,k_out,c)
         return test_frame
         
     def dispersion_objective(self,test_frame,c_sub):

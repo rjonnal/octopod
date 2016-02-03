@@ -2,6 +2,9 @@
 # file manager.  For each key/value pair in the data_paths
 # dictionary, the key will be used to label data sets in
 # the processing steps.
+
+data_root = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data'
+
 data_paths = {}
 #data_paths['2g_aooct'] = 'D:/rjonnal/Dropbox/Share/2g_aooct_data/Data/'
 data_paths['2g_aooct'] = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data'

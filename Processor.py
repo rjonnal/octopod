@@ -6,6 +6,21 @@ import scipy as sp
 from matplotlib import pyplot as plt
 from utils import translation,autotrim_bscan
 
+def process(frame,k_in,k_out,dispersion_coefficients):
+    test_frame = frame - np.mean(frame,axis=0)
+    test_frame = test_frame.T
+    k_interpolator = sp.interpolate.interp1d(k_in,test_frame,axis=0,copy=False)
+    test_frame = k_interpolator(k_out)
+
+    dispersion_axis = k_out - np.mean(k_out)
+    phase = np.exp(1j*np.polyval(dispersion_coefficients,dispersion_axis))
+    test_frame = test_frame * phase[None].T
+    test_frame = np.fft.fftshift(np.fft.fft(test_frame,axis=0),axes=0)
+    n_depth = test_frame.shape[0]
+    test_frame = test_frame[:n_depth/2,:]
+    return test_frame
+
+
 class Processor:
     """An interface for a data processing class. Classes which
     subclass this should be thought of as processing plugins.
@@ -64,20 +79,11 @@ class OCTProcessor(Processor):
                 print s
                 frame = self.h5['raw_data'][v][s]
                 frame[0,:] = frame[1,:]
-                test_frame = frame - np.mean(frame,axis=0)
-                test_frame = test_frame.T
-                k_interpolator = sp.interpolate.interp1d(self.k_in,test_frame,axis=0,copy=False)
-                test_frame = k_interpolator(self.k_out)
-
-                dispersion_axis = self.k_out - np.mean(self.k_out)
-                phase = np.exp(1j*np.polyval(c,dispersion_axis))
-                test_frame = test_frame * phase[None].T
-                test_frame = np.fft.fftshift(np.fft.fft(test_frame,axis=0),axes=0)
-                test_frame = test_frame[:n_depth/2,:]
+                test_frame = process(frame,self.k_in,self.k_out,c)
                 out_block[v,s,:,:] = test_frame
 
         self.h5.create_dataset(self.post_dataset,data=out_block,dtype='c8')
-        plt.imshow(np.abs(self.h5['processed_data'][0][10]))
+        plt.imshow(np.abs(self.h5['processed_data'][0][10]),aspect='auto',interpolation='none')
         plt.pause(1)
 
 class CoarseRegistrationProcessorUnfinished(Processor):
