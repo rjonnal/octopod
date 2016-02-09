@@ -24,7 +24,7 @@ dc_cutoff = 20
 
 dispersion_3_max = 10.0
 dispersion_3_min = -10.0
-dispersion_3_multiplier = 1e-18
+dispersion_3_multiplier = 1e-17
 dispersion_2_max = 10.0
 dispersion_2_min = -10.0
-dispersion_2_multiplier = 1e-12
+dispersion_2_multiplier = 1e-11

@@ -17,7 +17,8 @@ class Window(QtGui.QWidget):
         self.dispersion_coefs = [0.0,0.0,0.0,0.0]
         self.init_UI()
         self.logger = logging.getLogger(__name__)
-
+        self.proc_cache = {}
+        
     def report(self):
         poly = '%0.1e x^3 + %0.1e x^2'%(self.coef_3_text.value(),self.coef_2_text.value())
         self.logger.info(poly)
@@ -29,8 +30,26 @@ class Window(QtGui.QWidget):
     def change_coefs(self,newval):
         self.dispersion_coefs[0] = self.coef_3_text.value() * ocfg.dispersion_3_multiplier
         self.dispersion_coefs[1] = self.coef_2_text.value() * ocfg.dispersion_2_multiplier
-        self.bscan = self.get_bscan()
-        
+        self.show_bscan()
+
+    def compute_stats(self):
+        try:
+            self.bscan_max = np.max(self.bscan)
+            self.bscan_min = np.min(self.bscan)
+            self.bscan_mean = np.mean(self.bscan)
+            self.bscan_med = np.median(self.bscan)
+            self.bscan_var = np.var(self.bscan)
+            self.bscan_range = self.bscan_max - self.bscan_min
+        except Exception as e:
+            self.bscan_max = 0.0
+            self.bscan_min = 0.0  
+            self.bscan_mean = 0.0 
+            self.bscan_med = 0.0  
+            self.bscan_var = 0.0  
+            self.bscan_range = 0.0
+        self.stat_text = 'max = %0.3e\nmin = %0.3e\nmean=%0.3e\nmed=%0.3e\nvar=%0.3e\nrange=%0.3e'%(self.bscan_max,self.bscan_min,self.bscan_mean,self.bscan_med,self.bscan_var,self.bscan_range)
+        self.stats_label.setText(self.stat_text)
+            
     def init_UI(self):
 
         ## Create some widgets to be placed inside
@@ -38,7 +57,7 @@ class Window(QtGui.QWidget):
         btn_quit = QtGui.QPushButton('quit')
 
         btn_open.clicked.connect(self.open_file)
-        btn_quit.clicked.connect(self.report)
+        btn_quit.clicked.connect(self.close)
         
         self.coef_3_text = QtGui.QDoubleSpinBox()
         self.coef_2_text = QtGui.QDoubleSpinBox()
@@ -59,9 +78,10 @@ class Window(QtGui.QWidget):
 
         self.coef_3_text.valueChanged.connect(self.change_coefs)
         self.coef_2_text.valueChanged.connect(self.change_coefs)
+
+        self.stats_label = QtGui.QLabel('')
         
-        
-        plot = pg.ImageView()
+        self.canvas = pg.ImageView()
 
         ## Create a grid layout to manage the widgets size and position
         layout = QtGui.QGridLayout()
@@ -69,7 +89,8 @@ class Window(QtGui.QWidget):
         self.setLayout(layout)
 
         ## Add widgets to the layout in their proper positions
-        layout.addWidget(plot, 0, 0, 5, 10)  # plot goes on right side, spanning 3 rows
+        layout.addWidget(self.canvas, 0, 0, 5, 9)  # plot goes on right side, spanning 3 rows
+        layout.addWidget(self.stats_label, 0, 9, 5, 1)
         layout.addWidget(btn_open, 5, 0, 1, 1)   # button goes in upper-left
         layout.addWidget(btn_quit, 6, 0, 1, 1)   # text edit goes in middle-left
         layout.addWidget(self.coef_3_text, 5, 1, 1, 1)  # list widget goes in bottom-left
@@ -79,6 +100,8 @@ class Window(QtGui.QWidget):
 
         self.setMinimumWidth(1800)
         self.setMinimumHeight(1000)
+
+        self.compute_stats()
         
         self.show()
 
@@ -93,10 +116,16 @@ class Window(QtGui.QWidget):
             self.k_in = self.h5['k_in'][:]
             self.k_out = self.h5['k_out'][:]
             self.coefficients = self.h5['dispersion']['coefficients'][:]
-            self.bscan = self.get_bscan()
+            self.show_bscan()
 
-    def get_bscan(self,index=0):
-        return process(self.raw_vol[index,:,:],self.k_in,self.k_out,self.dispersion_coefs)[:,2:]
+    def show_bscan(self,index=0):
+        try:
+            self.bscan = self.proc_cache[self.dispersion_coefs]
+        except KeyError as ke:
+            self.bscan = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,self.dispersion_coefs)[800:,2:]).T
+            self.proc_cache[self.dispersion_coefs] = self.bscan
+        self.compute_stats()
+        self.canvas.setImage(self.bscan)
 
 
 
