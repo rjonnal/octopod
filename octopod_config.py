@@ -20,3 +20,11 @@ source_spectra['hroct'] = {'L0':801e-9,'dL':6.2e-11}
 source_spectra['2g_aooct'] = {'L0':920e-9,'dL':-9.5e-11}
 
 dc_cutoff = 20
+
+
+dispersion_3_max = 10.0
+dispersion_3_min = -10.0
+dispersion_3_multiplier = 1e-18
+dispersion_2_max = 10.0
+dispersion_2_min = -10.0
+dispersion_2_multiplier = 1e-12
