@@ -8,6 +8,7 @@ from octopod.Processor import process
 from octopod import DispersionOptimizer
 from pyqtgraph import ImageView
 import logging
+from time import time
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -24,8 +25,8 @@ class Window(QtGui.QWidget):
         self.logger.info(poly)
 
     def set_coef_labels(self):
-        self.coef_3_label.setText('%0.2e'%(self.dispersion_coefs[0]))
-        self.coef_2_label.setText('%0.2e'%(self.dispersion_coefs[1]))
+        self.coef_3_label.setText('%s / %0.2e'%(self.coef_3_multiplier_text,self.dispersion_coefs[0]))
+        self.coef_2_label.setText('%s / %0.2e'%(self.coef_2_multiplier_text,self.dispersion_coefs[1]))
 
     def change_coefs(self,newval):
         self.dispersion_coefs[0] = self.coef_3_text.value() * ocfg.dispersion_3_multiplier
@@ -64,6 +65,11 @@ class Window(QtGui.QWidget):
 
         self.coef_3_multiplier = ocfg.dispersion_3_multiplier
         self.coef_2_multiplier = ocfg.dispersion_2_multiplier
+
+
+        self.coef_3_multiplier_text = 'x 10^%d'%(np.log10(self.coef_3_multiplier))
+        self.coef_2_multiplier_text = 'x 10^%d'%(np.log10(self.coef_2_multiplier))
+        
 
         self.coef_3_text.setMaximum(ocfg.dispersion_3_max)
         self.coef_3_text.setMinimum(ocfg.dispersion_3_min)
@@ -120,23 +126,28 @@ class Window(QtGui.QWidget):
 
     def show_bscan(self,index=0):
         try:
-            self.bscan = self.proc_cache[self.dispersion_coefs]
+            self.bscan = self.proc_cache[(self.dispersion_coefs[0],self.dispersion_coefs[1])]
         except KeyError as ke:
             self.bscan = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,self.dispersion_coefs)[800:,2:]).T
-            self.proc_cache[self.dispersion_coefs] = self.bscan
+            self.proc_cache[(self.dispersion_coefs[0],self.dispersion_coefs[1])] = self.bscan
         self.compute_stats()
+        self.set_coef_labels()
         self.canvas.setImage(self.bscan)
 
 
 
 def main():
     ## Always start by initializing Qt (only once per application)
+    print time()
     app = QtGui.QApplication([])
+    print time()
 
     ex = Window()
+    print time()
 
     ## Start the Qt event loop
     app.exec_()
+    print time()
 
 
 if __name__=='__main__':
