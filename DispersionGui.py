@@ -18,7 +18,6 @@ class Window(QtGui.QWidget):
         self.dispersion_coefs = [0.0,0.0,0.0,0.0]
         self.init_UI()
         self.logger = logging.getLogger(__name__)
-        self.proc_cache = {}
         
     def report(self):
         poly = '%0.1e x^3 + %0.1e x^2'%(self.coef_3_text.value(),self.coef_2_text.value())
@@ -54,11 +53,13 @@ class Window(QtGui.QWidget):
     def init_UI(self):
 
         ## Create some widgets to be placed inside
-        btn_open = QtGui.QPushButton('open file')
-        btn_quit = QtGui.QPushButton('quit')
-
+        btn_open = QtGui.QPushButton('&open file')
+        btn_quit = QtGui.QPushButton('&quit')
+        btn_write = QtGui.QPushButton('&write to hdf5')
+        
         btn_open.clicked.connect(self.open_file)
         btn_quit.clicked.connect(self.close)
+        btn_write.clicked.connect(self.write_coefs)
         
         self.coef_3_text = QtGui.QDoubleSpinBox()
         self.coef_2_text = QtGui.QDoubleSpinBox()
@@ -98,7 +99,8 @@ class Window(QtGui.QWidget):
         layout.addWidget(self.canvas, 0, 0, 5, 9)  # plot goes on right side, spanning 3 rows
         layout.addWidget(self.stats_label, 0, 9, 5, 1)
         layout.addWidget(btn_open, 5, 0, 1, 1)   # button goes in upper-left
-        layout.addWidget(btn_quit, 6, 0, 1, 1)   # text edit goes in middle-left
+        layout.addWidget(btn_write, 6, 0, 1, 1)   # text edit goes in middle-left
+        layout.addWidget(btn_quit, 7, 0, 1, 1)   # text edit goes in middle-left
         layout.addWidget(self.coef_3_text, 5, 1, 1, 1)  # list widget goes in bottom-left
         layout.addWidget(self.coef_2_text, 6, 1, 1, 1)  # list widget goes in bottom-left
         layout.addWidget(self.coef_3_label, 5, 2, 1, 1)
@@ -121,9 +123,31 @@ class Window(QtGui.QWidget):
             self.raw_vol = self.h5['raw_data'][0,:,:,:]
             self.k_in = self.h5['k_in'][:]
             self.k_out = self.h5['k_out'][:]
-            self.coefficients = self.h5['dispersion']['coefficients'][:]
+            self.dispersion_coefs = self.h5['dispersion']['coefficients'][:]
+            self.coef_3_text.setValue(self.dispersion_coefs[0]/self.coef_3_multiplier)
+            self.coef_2_text.setValue(self.dispersion_coefs[1]/self.coef_2_multiplier)
+            self.proc_cache = {}
             self.show_bscan()
+            
+    def write_coefs(self):
+        old_coefs = self.h5['dispersion']['coefficients'][:]
+        try:
+            del self.h5['dispersion']['coefficients']
+        except Exception as e:
+            print '1',e
+        
+        
+        try:
+            del self.h5['dispersion']['old_coefficients']
+        except Exception as e:
+            print '2',e
+            
+        self.h5['dispersion'].create_dataset('coefficients',data=self.dispersion_coefs)
+        self.h5['dispersion'].create_dataset('old_coefficients',data=old_coefs)
 
+        print self.h5['dispersion']['coefficients'][:]
+        print self.h5['dispersion']['old_coefficients'][:]
+            
     def show_bscan(self,index=0):
         try:
             self.bscan = self.proc_cache[(self.dispersion_coefs[0],self.dispersion_coefs[1])]
