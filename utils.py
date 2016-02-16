@@ -36,7 +36,7 @@ def translation(im0, im1,xlims=None,ylims=None):
     ir = abs(np.fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1))))
     goodness = np.max(ir)
     ty, tx = np.unravel_index(np.argmax(ir), shape)
-    debug = False
+    debug = True
     if debug:
         print tx,ty,goodness
         plt.imshow(ir,interpolation='none')

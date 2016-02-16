@@ -9,5 +9,6 @@ from DatabaseManager import *
 from FileManager import *
 from Processor import *
 from DispersionOptimizer import *
+from Model import *
 import utils
 from movie import *

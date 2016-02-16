@@ -61,8 +61,6 @@ class ProcessorCopyRaw(Processor):
         self.h5.create_dataset(self.post_dataset,(n_vol,n_slow,n_fast,n_depth))
         for i_vol in range(n_vol):
             self.h5[self.post_dataset][i_vol] = self.h5[self.pre_dataset][i_vol]
-            
-
 
 class OCTProcessor(Processor):
     def __init__(self,h5):
