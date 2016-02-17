@@ -27,23 +27,63 @@ def autotrim_bscan(b):
     z2 = valid[-1]
     return b[z1:z2,:],z1,z2
 
-def translation(im0, im1,xlims=None,ylims=None):
+def translation(im0in, im1in, xlims=None, ylims=None, debug=False):
     """Return translation vector to register two images
     of equal size. Returns a 3-tuple (translation_x,translation_y,correlation)."""
+
+    # if either image is blank, return 0, 0, 0.0 and stop
+    if np.max(im0in)==np.min(im0in) or np.max(im1in)==np.min(im1in):
+        return (0.0,0.0,0.0)
+
+    im0 = (im0in-np.mean(im0in))/np.std(im0in)
+    im1 = (im1in-np.mean(im1in))/np.std(im1in)
+    
+    # if the images are identical, return 0, 0, 1.0 and stop
+    if np.array_equal(im0,im1):
+        return (0.0,0.0,1.0)
+
     shape = im0.shape
+    
     f0 = np.fft.fft2(im0)
     f1 = np.fft.fft2(im1)
-    ir = abs(np.fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1))))
+
+    # original line:
+    #ir = abs(np.fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1))))
+    
+
+    # break it down for checking:
+    f1c = f1.conjugate()
+    num = f0 * np.conj(f1)
+    denom = abs(f0) * abs(f1)
+
+    # to handle some stupid corner cases, esp. where test images are used:
+    # put 1's into the denominator where both numerator and denominator are 0
+    denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
+    frac = num/denom
+
+    ir = np.abs(np.fft.ifft2(frac))
+
     goodness = np.max(ir)
     ty, tx = np.unravel_index(np.argmax(ir), shape)
-    debug = True
     if debug:
-        print tx,ty,goodness
-        plt.imshow(ir,interpolation='none')
-        plt.colorbar()
+        plt.subplot(3,2,1)
+        plt.cla()
+        plt.imshow(im0,interpolation='none',aspect='auto')
+        plt.subplot(3,2,2)
+        plt.cla()
+        plt.imshow(im1,interpolation='none',aspect='auto')
+        plt.subplot(3,2,3)
+        plt.cla()
+        plt.imshow(np.abs(f0),interpolation='none',aspect='auto')
+        plt.subplot(3,2,4)
+        plt.cla()
+        plt.imshow(np.abs(f1),interpolation='none',aspect='auto')
+        plt.subplot(3,2,5)
+        plt.cla()
+        plt.imshow(ir,interpolation='none',aspect='auto')
         plt.autoscale(False)
         plt.plot(tx,ty,'ws')
-        plt.show()
+        plt.pause(.0001)
     if ty > shape[0] // 2:
         ty -= shape[0]
     if tx > shape[1] // 2:

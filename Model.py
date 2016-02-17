@@ -30,11 +30,11 @@ class Model:
         self.logger = logging.getLogger(__name__)
 
 
-    def blur(self,bscan):
+    def blur(self,bscan,kernel_width=5):
         #bprof = np.mean(bscan,axis=1)
         #sy,sx = bscan.shape
         #out = np.tile(bprof,(sx,1)).T
-        return sp.signal.convolve2d(bscan,np.ones((1,5)),mode='same')
+        return sp.signal.convolve2d(bscan,np.ones((1,kernel_width)),mode='same')/float(kernel_width)
         
         return out
         
@@ -42,33 +42,40 @@ class Model:
         self.logger.info('Making model...')
         avol = np.abs(self.h5['processed_data'][vidx,:,:,:])
         nSlow,nFast,nDepth = avol.shape
-        tx_vec = [0.0]
-        ty_vec = [0.0]
-        g_vec = [1.0]
-
         if True:
             # make a test volume with very clean translations.
-            avol = np.zeros(avol.shape)
+            avol = np.ones(avol.shape)
             zpos = 100
             rad = 3
+            zpos_vec = []
             for iSlow in range(nSlow):
                 avol[iSlow,zpos-rad:zpos+rad,:] = avol[iSlow,zpos-rad:zpos+rad,:] + 100.0
                 zpos = np.abs(np.round(zpos + np.random.randn()))
+                zpos_vec.append(zpos)
+
+                
+        # crop to avoid edge effects in the registration:
+        if avol.shape[2]>10:
+            avol = avol[:,:,5:-5]
+
+        tx_vec = [0.0]
+        ty_vec = [0.0]
+        g_vec = [1.0]
 
         template = None
 
         # compute an intensity threshold for the first template image,
         # to avoid using 
 
-        thresh = np.mean(avol) * .75
-        
-        for iSlow in range(1,nSlow):
-            if debug:
-                self.logger.debug('%d of %d'%(iSlow+1,nSlow))
+        thresh = np.mean(avol)*.75
 
+        for iSlow in range(1,nSlow):
             last = self.blur(avol[iSlow-1,:,:])
 
             bright_enough = np.mean(last)>=thresh
+            
+            if debug:
+                self.logger.debug('Frame %d of %d. Sufficiently bright: %d'%(iSlow,nSlow-1,bright_enough))
             
             if template is None:
                 if bright_enough:
@@ -89,13 +96,13 @@ class Model:
                 #plt.colorbar()
                 plt.pause(.1)
             
-            tx,ty,g = translation(target,template)
-            print tx,ty,g
+            tx,ty,g = translation(target,template,debug=True)
+            if debug:
+                self.logger.debug('x:%d; y:%d; goodness:%0.3f'%(tx,ty,g))
+                
             # ty is the amount to shift target to align with template
             # let's say template's profile is [0 1 0 0] and target's is
             # [0 0 1 0]. ty = -1 in this case.
 
-        print tx_vec
-        print ty_vec
 
 
