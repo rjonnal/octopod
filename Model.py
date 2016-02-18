@@ -19,7 +19,7 @@ class Model:
     """A model of gross retinal reflectance, used for segmenting
     and labeling A-scans."""
 
-    def __init__(self,h5):
+    def __init__(self,h5,debug=False):
         """Initialize model. May pass an h5py.File object or .hdf5 filename.
         The file or object must contain a 'processed_data' dataset containing
         at least one volume."""
@@ -28,7 +28,11 @@ class Model:
         else:
             self.h5 = h5
         self.logger = logging.getLogger(__name__)
-
+        try:
+            self.profile = self.h5['model']['profile'][:]
+        except Exception as e:
+            self.logger.info('Model does not exist in h5 file.')
+            self.profile = self.make_model(debug=debug)
 
     def blur(self,bscan,kernel_width=5):
         return sp.signal.convolve2d(bscan,np.ones((1,kernel_width)),mode='same')/float(kernel_width)
@@ -125,10 +129,13 @@ class Model:
                 plt.plot(np.mean(template/counter,axis=1))
                 plt.pause(.1)
 
-        plt.figure()
-        plt.imshow(template,aspect='auto',interpolation='none')
-        plt.colorbar()
-        plt.figure()
-        plt.imshow(counter,aspect='auto',interpolation='none')
-        plt.colorbar()
-        plt.show()
+        model_profile = np.mean(template/counter,axis=1)
+        
+        self.h5.require_group('model')
+        try:
+            del self.h5['/model/profile']
+        except Exception as e:
+            pass
+
+        self.h5['model'].create_dataset('profile',data=model_profile)
+
