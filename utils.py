@@ -90,13 +90,20 @@ def translation(im0in, im1in, xlims=None, ylims=None, debug=False):
         tx -= shape[1]
     return (tx, ty, goodness)
 
-def find_peaks(prof,intensity_threshold=-np.inf):
+def find_peaks(prof,intensity_threshold=-np.inf,gradient_threshold=-np.inf):
     left = prof[:-2]
     center = prof[1:-1]
     right = prof[2:]
     peaks = np.where(np.logical_and(center>right,center>left))[0]+1
     peak_vals = prof[peaks]
-    valid = np.where(peak_vals>=intensity_threshold)[0]
+    all_gradients = np.abs(np.diff(prof))
+    l_gradients = all_gradients[:-1]
+    r_gradients = all_gradients[1:]
+    gradients = np.max([l_gradients,r_gradients],axis=0)
+    peak_vals = np.array(peak_vals)
+    gradient_vals = np.array(gradients[peaks-1])
+    valid = np.where(np.logical_and(peak_vals>=intensity_threshold,gradient_vals>=gradient_threshold))[0]
+
     return peaks[valid]
 
 def gaussian(x,x0,sigma):

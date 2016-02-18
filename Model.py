@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
-from utils import translation,autotrim_bscan
+from utils import translation,autotrim_bscan,find_peaks
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
@@ -23,11 +23,12 @@ class Model:
         """Initialize model. May pass an h5py.File object or .hdf5 filename.
         The file or object must contain a 'processed_data' dataset containing
         at least one volume."""
+        self.logger = logging.getLogger(__name__)
         if type(h5)==str:
             self.h5 = h5py.File(h5)
+            self.logger.info('Opening file %s.'%self.h5)
         else:
             self.h5 = h5
-        self.logger = logging.getLogger(__name__)
         try:
             self.profile = self.h5['model']['profile'][:]
         except Exception as e:
@@ -132,6 +133,12 @@ class Model:
         model_profile = np.mean(template/counter,axis=1)
         
         self.h5.require_group('model')
+
+        self.write_profile(model_profile)
+        
+        return model_profile
+
+    def write_profile(self,model_profile):
         try:
             del self.h5['/model/profile']
         except Exception as e:
@@ -139,3 +146,107 @@ class Model:
 
         self.h5['model'].create_dataset('profile',data=model_profile)
 
+    def crop(self):
+        plt.plot(self.profile)
+        plt.title('enter cropping coordinates in console')
+        plt.pause(.1)
+
+        z1default = np.where(self.profile)[0][0]
+        z2default = np.where(self.profile)[0][-1]
+        
+        z1str = raw_input('Enter starting index of valid region [%d]: '%z1default)
+        z2str = raw_input('Enter ending index of valid region: [%d]:'%z2default)
+        
+        plt.close()
+        
+        if not len(z1str):
+            z1 = z1default
+        else:
+            z1 = int(z1str)
+
+        if not len(z2str):
+            z2 = z2default
+        else:
+            z2 = int(z2str)
+        
+        self.profile[:z1] = 0.0
+        self.profile[z2+1:] = 0.0
+        self.write_profile(self.profile)
+        plt.cla()
+        plt.plot(self.profile)
+        plt.title('post cropping')
+        plt.show()
+        
+    
+    def label(self,smoothing=5):
+
+
+        # x = np.zeros(10)
+        # x[3] = 1.0
+        # x[4] = 0.5
+        # x[7] = 2.0
+        
+        # print find_peaks(x,gradient_threshold=1.00001)
+        # sys.exit()
+        
+        if smoothing>1:
+            working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
+        else:
+            working_profile = self.profile
+        
+        # find peaks and troughs:
+        gthresh = 5.0/smoothing
+
+        
+        peaks = list(find_peaks(working_profile,gradient_threshold=gthresh))+list(find_peaks(-working_profile,gradient_threshold=gthresh))
+        peaks = sorted(peaks)
+        
+        label_dict = {}
+
+        idx = 0
+        z = np.arange(len(working_profile))
+        done = False or not len(peaks)
+        
+        while not done:
+            
+            peak = peaks[idx]
+            
+            z1 = max(0,peak-10)
+            z2 = min(len(working_profile),peak+10)
+            
+            plt.subplot(1,2,1)
+            plt.cla()
+            plt.plot(working_profile)
+            plt.plot(peak,working_profile[peak],'k*')
+            plt.plot(self.profile)
+            plt.plot(peak,self.profile[peak],'go')
+            plt.subplot(1,2,2)
+            plt.cla()
+            plt.plot(z[z1:z2],working_profile[z1:z2])
+            plt.plot(peak,working_profile[peak],'k*')
+            plt.plot(z[z1:z2],self.profile[z1:z2])
+            plt.plot(peak,self.profile[peak],'go')
+
+            
+            plt.pause(.1)
+            label = raw_input('Enter label for marked peak [q for quit]: ')
+            
+            if label=='':
+                idx = (idx + 1)%len(peaks)
+            elif label[0]=='+' or label[0]=='-':
+                idx = (idx + int(label))%len(peaks)
+            elif label=='q':
+                done = True
+            else:
+                label_dict[label] = peak
+
+        try:
+            del self.h5['/model/labels']
+        except Exception as e:
+            pass
+
+        self.h5['model'].create_group('labels')
+        for key in label_dict.keys():
+            self.h5['model/labels'].create_dataset(key,data=label_dict[key])
+
+        
