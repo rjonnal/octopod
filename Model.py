@@ -31,18 +31,14 @@ class Model:
 
 
     def blur(self,bscan,kernel_width=5):
-        #bprof = np.mean(bscan,axis=1)
-        #sy,sx = bscan.shape
-        #out = np.tile(bprof,(sx,1)).T
         return sp.signal.convolve2d(bscan,np.ones((1,kernel_width)),mode='same')/float(kernel_width)
-        
-        return out
         
     def make_model(self,vidx=0,debug=False):
         self.logger.info('Making model...')
         avol = np.abs(self.h5['processed_data'][vidx,:,:,:])
         nSlow,nFast,nDepth = avol.shape
-        if True:
+        
+        if False:
             # make a test volume with very clean translations.
             avol = np.ones(avol.shape)
             zpos = 100
@@ -80,6 +76,8 @@ class Model:
             if template is None:
                 if bright_enough:
                     template = last
+                    counter = np.ones(template.shape)
+                    sy,sx = template.shape
                 else:
                     continue
             
@@ -96,13 +94,41 @@ class Model:
                 #plt.colorbar()
                 plt.pause(.1)
             
-            tx,ty,g = translation(target,template,debug=True)
+            tx,ty,g = translation(target,template,debug=False)
             if debug:
                 self.logger.debug('x:%d; y:%d; goodness:%0.3f'%(tx,ty,g))
                 
             # ty is the amount to shift target to align with template
             # let's say template's profile is [0 1 0 0] and target's is
             # [0 0 1 0]. ty = -1 in this case.
+            if ty<0:
+                put0 = -ty
+                put1 = sy
+                get0 = 0
+                get1 = ty
+            elif ty>0:
+                put0 = 0
+                put1 = -ty
+                get0 = ty
+                get1 = sy
+            else:
+                get0 = 0
+                get1 = sy
+                put0 = 0
+                put1 = sy
 
+            template[put0:put1,:] = template[put0:put1,:] + target[get0:get1,:]
+            counter[put0:put1,:] = counter[put0:put1] + 1.0
 
+            if debug:
+                plt.cla()
+                plt.plot(np.mean(template/counter,axis=1))
+                plt.pause(.1)
 
+        plt.figure()
+        plt.imshow(template,aspect='auto',interpolation='none')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(counter,aspect='auto',interpolation='none')
+        plt.colorbar()
+        plt.show()
