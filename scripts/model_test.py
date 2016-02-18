@@ -17,6 +17,6 @@ for idx,fn in enumerate(files):
     model = Model(fn)
     plt.figure()
     plt.plot(model.profile)
-    plt.pause(.1)
+    outfn = fn.replace('.hdf5','_model.png')
+    plt.savefig(outfn)
     
-plt.show()
