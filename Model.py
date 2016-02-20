@@ -195,7 +195,7 @@ class Model:
             working_profile = self.profile
         
         # find peaks and troughs:
-        gthresh = 5.0/smoothing
+        gthresh = 1.0/smoothing
 
         
         peaks = list(find_peaks(working_profile,gradient_threshold=gthresh))+list(find_peaks(-working_profile,gradient_threshold=gthresh))
@@ -239,6 +239,8 @@ class Model:
                 done = True
             else:
                 label_dict[label] = peak
+
+        plt.close()
 
         try:
             del self.h5['/model/labels']
