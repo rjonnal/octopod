@@ -21,6 +21,8 @@ source_spectra['2g_aooct'] = {'L0':920e-9,'dL':-9.5e-11}
 
 dc_cutoff = 20
 
+model_database = '/home/rjonnal/Dropbox/Share/axial_model/database.hdf5'
+
 
 dispersion_3_max = 10.0
 dispersion_3_min = -10.0

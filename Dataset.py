@@ -21,7 +21,7 @@ class Dataset:
 
     def get_h5_handle(self):
         return h5py.File(self.h5fn)
-    
+
     def initialize(self,system_label):
 
         self.h5 = h5py.File(self.h5fn,'w')

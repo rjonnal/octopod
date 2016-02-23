@@ -146,35 +146,6 @@ class Model:
 
         self.h5['model'].create_dataset('profile',data=model_profile)
 
-    def crop(self):
-        plt.plot(self.profile)
-        plt.title('enter cropping coordinates in console')
-        plt.pause(.1)
-
-        z1default = np.where(self.profile)[0][0]
-        z2default = np.where(self.profile)[0][-1]
-        
-        z1str = raw_input('Enter starting index of valid region [%d]: '%z1default)
-        z2str = raw_input('Enter ending index of valid region: [%d]:'%z2default)
-        
-        plt.close()
-        
-        if not len(z1str):
-            z1 = z1default
-        else:
-            z1 = int(z1str)
-
-        if not len(z2str):
-            z2 = z2default
-        else:
-            z2 = int(z2str)
-        
-        self.profile[:z1] = 0.0
-        self.profile[z2+1:] = 0.0
-        self.write_profile(self.profile)
-        plt.close()
-        
-    
     def click_crop(self):
         global clicks
         clicks = []
@@ -216,67 +187,6 @@ class Model:
             print e
         return out
 
-    def label(self,smoothing=5):
-        if smoothing>1:
-            working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
-        else:
-            working_profile = self.profile
-        
-        # find peaks and troughs:
-        gthresh = 1.0/smoothing
-
-        peaks = list(find_peaks(working_profile,gradient_threshold=gthresh))+list(find_peaks(-working_profile,gradient_threshold=gthresh))
-        peaks = sorted(peaks)
-        
-        label_dict = self.get_label_dict()
-        
-        idx = 0
-        z = np.arange(len(working_profile))
-        done = False or not len(peaks)
-        
-        while not done:
-            
-            peak = peaks[idx]
-            
-            z1 = max(0,peak-10)
-            z2 = min(len(working_profile),peak+10)
-            
-            plt.subplot(1,2,1)
-            plt.cla()
-            plt.plot(working_profile)
-            plt.plot(peak,working_profile[peak],'k*')
-            plt.plot(self.profile)
-            plt.plot(peak,self.profile[peak],'go')
-            plt.subplot(1,2,2)
-            plt.cla()
-            plt.plot(z[z1:z2],working_profile[z1:z2])
-            plt.plot(peak,working_profile[peak],'k*')
-            plt.plot(z[z1:z2],self.profile[z1:z2])
-            plt.plot(peak,self.profile[peak],'go')
-
-            
-            plt.pause(.1)
-            label = raw_input('Enter label for marked peak [q for quit]: ')
-            
-            if label=='':
-                idx = (idx + 1)%len(peaks)
-            elif label[0]=='+' or label[0]=='-':
-                idx = (idx + int(label))%len(peaks)
-            elif label=='q':
-                done = True
-            else:
-                label_dict[label] = peak
-
-        plt.close()
-
-        try:
-            del self.h5['/model/labels']
-        except Exception as e:
-            pass
-
-        self.h5['model'].create_group('labels')
-        for key in label_dict.keys():
-            self.h5['model/labels'].create_dataset(key,data=label_dict[key])
 
 
     def click_label(self,smoothing=5):
@@ -299,7 +209,6 @@ class Model:
         fig = plt.figure(figsize=(20,6))
         for key in plt.rcParams.keys():
             if key[:6]=='keymap':
-                print 'setting %s to nothing'%key
                 plt.rcParams[key] = ''
         
         global current_x,current_label,label_dict
@@ -383,4 +292,6 @@ class Model:
         for key in label_dict.keys():
             self.h5['model/labels'].create_dataset(key,data=label_dict[key])
 
+        
+        mdb = h5py.File(ocfg.model_database)
         
