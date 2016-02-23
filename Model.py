@@ -172,23 +172,51 @@ class Model:
         self.profile[:z1] = 0.0
         self.profile[z2+1:] = 0.0
         self.write_profile(self.profile)
-        plt.cla()
-        plt.plot(self.profile)
-        plt.title('post cropping')
-        plt.show()
+        plt.close()
         
     
+    def click_crop(self):
+        global clicks
+        clicks = []
+        
+        fig = plt.figure(figsize=(10,6))
+        
+        def onclick(event):
+            global clicks
+            newclick = round(event.xdata)
+            clicks.append(newclick)
+            plt.axvline(newclick)
+            plt.draw()
+            
+        cid = fig.canvas.mpl_connect('button_press_event',onclick)
+        
+        plt.plot(self.profile)
+        plt.show()
+
+        if len(clicks)>=2:
+
+            z1 = np.min(clicks)
+            z2 = np.max(clicks)
+            self.profile[:z1] = 0.0
+            self.profile[z2+1:] = 0.0
+            self.write_profile(self.profile)
+            
+        plt.cla()
+        plt.plot(self.profile)
+        plt.pause(3)
+        plt.close()
+
+
+    def get_label_dict(self):
+        out = {}
+        try:
+            for key in self.h5['model/labels'].keys():
+                out[key] = self.h5['model/labels'][key]
+        except Exception as e:
+            print e
+        return out
+
     def label(self,smoothing=5):
-
-
-        # x = np.zeros(10)
-        # x[3] = 1.0
-        # x[4] = 0.5
-        # x[7] = 2.0
-        
-        # print find_peaks(x,gradient_threshold=1.00001)
-        # sys.exit()
-        
         if smoothing>1:
             working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
         else:
@@ -197,12 +225,11 @@ class Model:
         # find peaks and troughs:
         gthresh = 1.0/smoothing
 
-        
         peaks = list(find_peaks(working_profile,gradient_threshold=gthresh))+list(find_peaks(-working_profile,gradient_threshold=gthresh))
         peaks = sorted(peaks)
         
-        label_dict = {}
-
+        label_dict = self.get_label_dict()
+        
         idx = 0
         z = np.arange(len(working_profile))
         done = False or not len(peaks)
@@ -242,6 +269,111 @@ class Model:
 
         plt.close()
 
+        try:
+            del self.h5['/model/labels']
+        except Exception as e:
+            pass
+
+        self.h5['model'].create_group('labels')
+        for key in label_dict.keys():
+            self.h5['model/labels'].create_dataset(key,data=label_dict[key])
+
+
+    def click_label(self,smoothing=5):
+        if smoothing>1:
+            working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
+        else:
+            working_profile = self.profile
+        
+        # find peaks and troughs:
+        gthresh = 1.0/smoothing
+
+        peaks = list(find_peaks(working_profile,gradient_threshold=gthresh))+list(find_peaks(-working_profile,gradient_threshold=gthresh))
+        peaks = sorted(peaks)
+        
+        idx = 0
+        z = np.arange(len(working_profile))
+        done = False or not len(peaks)
+
+
+        fig = plt.figure(figsize=(20,6))
+        for key in plt.rcParams.keys():
+            if key[:6]=='keymap':
+                print 'setting %s to nothing'%key
+                plt.rcParams[key] = ''
+        
+        global current_x,current_label,label_dict
+        label_dict = self.get_label_dict()
+        current_x = 0
+        current_label = ''
+
+        def plot_at(x):
+            global current_label
+            plt.subplot(121)
+            plt.cla()
+            plt.plot(z,working_profile)
+            plt.plot(z[x],working_profile[x],'ks')
+            valid = np.where(working_profile)[0]
+            plt.xlim((valid[0],valid[-1]))
+            plt.autoscale(False)
+            for label in label_dict.keys():
+                label_z = z[label_dict[label]]
+                plt.text(label_z,working_profile[label_z],label,ha='center',va='bottom')
+
+            plt.subplot(122)
+            plt.cla()
+            plt.plot(z,working_profile)
+            plt.plot(z[x],working_profile[x],'ks')
+            plt.xlim((z[x]-10,z[x]+10))
+            z1 = max(0,x-10)
+            z2 = min(len(z),x+10)
+            ymin = np.min(working_profile[z1:z2])
+            ymax = np.max(working_profile[z1:z2])
+            plt.ylim((ymin,ymax))
+            plt.title(current_label)
+            plt.draw()
+
+
+        def onclick(event):
+            global current_x
+            # print 'button=%d, x=%d, y=%d, xdata=%f, ydata=%f'%(
+            #     event.button, event.x, event.y, event.xdata, event.ydata)
+            current_x = round(event.xdata)
+            plot_at(current_x)
+
+        def onpress(event):
+            global current_x,current_label,label_dict
+            if event.key=='right':
+                current_x = (current_x + 1)%len(working_profile)
+            elif event.key=='ctrl+right':
+                current_x = (current_x + 20)%len(working_profile)
+            elif event.key=='left':
+                current_x = (current_x - 1)%len(working_profile)
+            elif event.key=='ctrl+left':
+                current_x = (current_x - 20)%len(working_profile)
+            elif event.key=='shift':
+                pass
+            elif event.key=='/':
+                pass
+            elif event.key in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                current_label = current_label + event.key.upper()
+            elif event.key=='backspace':
+                current_label = current_label[:-1]
+            elif current_label=='delete':
+                label_dict = {}
+            elif event.key=='enter':
+                label_dict[current_label] = current_x
+                current_label = ''
+            plot_at(current_x)
+            
+
+        cid = fig.canvas.mpl_connect('button_press_event', onclick)
+        pid = fig.canvas.mpl_connect('key_press_event', onpress)
+        
+        plot_at(current_x)
+        
+        plt.show()
+        
         try:
             del self.h5['/model/labels']
         except Exception as e:

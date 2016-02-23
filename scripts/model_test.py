@@ -15,11 +15,6 @@ for idx,fn in enumerate(files):
     print
     print 'File %d of %d'%(idx+1,len(files))
     model = Model(fn)
-    model.crop()
-    model.label()
+    model.click_crop()
+    model.click_label()
     
-    # plt.figure()
-    # plt.plot(model.profile)
-    # outfn = fn.replace('.hdf5','_model.png')
-    # plt.savefig(outfn)
-    # plt.close()
