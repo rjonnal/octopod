@@ -1,8 +1,13 @@
 import h5py
 import hashlib,os
+import numpy as np
 
 class EccentricityGuesser:
-
+    '''Try to guess the eccentricity from the filename. Here are the assumptions:
+    1. Abbreviations for temporal, nasal, superior, and inferior are upper-case first
+    letters T, N, S, and I.
+    2. If one of these letters is preceded by a string of characters that can be interpreted
+    as a float, it's taken to mean the number of degrees in that direction.'''
     def findall(self,target,pattern):
         out = []
         remainder = target
@@ -14,41 +19,91 @@ class EccentricityGuesser:
                 out.append(location)
         return out
 
+    def guess_to_h5(self,h5filename):
+
+        si_ecc,nt_ecc = self.guess(h5filename)
+        
+        h5 = h5py.File(h5filename)
+        try:
+            del h5['eccentricity']
+        except Exception as e:
+            pass
+
+        h5.create_group('eccentricity')
+        h5['eccentricity'].create_dataset('superior_inferior',data=si_ecc)
+        h5['eccentricity'].create_dataset('nasal_temporal',data=nt_ecc)
+        h5['eccentricity'].create_dataset('superior_and_nasal_are_negative',data=[np.nan])
+    
     def search_for_eccentricity(self,token,index):
         '''Try to convert characters just before index into a number.'''
-        out = -1
-        for start in range(0,index-1):
+        out = None
+        for start in range(0,index):
             test = token[start:index]
             try:
-                out = int(test)
+                out = float(test)
                 break
             except Exception as e:
                 continue
-
         return out
 
 
     def token_guesser(self,token,letter):
-        indices = self.findall(token.lower(),letter.lower())
-        out = []
+        indices = self.findall(token,letter)
+        value = None
         for idx in indices:
             value = self.search_for_eccentricity(token,idx)
-            out.append(value)
-        print token,letter,out
-        return out
+            if value is not None:
+                break
+        return value
     
     def guess(self,filename):
         head,tail = os.path.split(filename)
         tokens = tail.split('_')
+        s_ecc = []
+        i_ecc = []
+        n_ecc = []
+        t_ecc = []
         for token in tokens:
             # find all instances of s, i, n, t
-            s_idx = self.token_guesser(token,'s')
-            i_idx = self.token_guesser(token,'i')
-            n_idx = self.token_guesser(token,'n')
-            t_idx = self.token_guesser(token,'t')
-            
-            
-        
+            s_ecc.append(self.token_guesser(token,'S'))
+            i_ecc.append(self.token_guesser(token,'I'))
+            n_ecc.append(self.token_guesser(token,'N'))
+            t_ecc.append(self.token_guesser(token,'T'))
+
+
+        # defaults in case no ecc is found
+        si_ecc = 0.0
+        nt_ecc = 0.0
+
+        si_done = False
+        for s in s_ecc:
+            if s is not None:
+                si_ecc = -s
+                si_done = True
+                break
+                
+        if not si_done:
+            for i in i_ecc:
+                if i is not None:
+                    si_ecc = i
+                    si_done = True
+                    break
+
+        nt_done = False
+        for n in n_ecc:
+            if n is not None:
+                nt_ecc = -n
+                nt_done = True
+                break
+                
+        if not nt_done:
+            for t in t_ecc:
+                if t is not None:
+                    nt_ecc = t
+                    nt_done = True
+                    break
+
+        return si_ecc,nt_ecc
 
 class IDGenerator:
 

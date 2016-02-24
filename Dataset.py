@@ -22,6 +22,22 @@ class Dataset:
     def get_h5_handle(self):
         return h5py.File(self.h5fn)
 
+
+    def ecc_to_h5(self):
+        eg = EccentricityGuesser()
+        si_ecc,nt_ecc = eg.guess(self.raw_data_filename)
+        
+        try:
+            del self.h5['eccentricity']
+        except Exception as e:
+            pass
+
+        self.h5.create_group('eccentricity')
+        self.h5['eccentricity'].create_dataset('superior_inferior',data=si_ecc)
+        self.h5['eccentricity'].create_dataset('nasal_temporal',data=nt_ecc)
+        self.h5['eccentricity'].create_dataset('superior_and_nasal_are_negative',data=[np.nan])
+        
+
     def initialize(self,system_label):
 
         self.h5 = h5py.File(self.h5fn,'w')
@@ -60,6 +76,7 @@ class Dataset:
         self.h5overwrite('k_out',self.k_out)
         self.h5overwrite('system_label',system_label)
 
+        self.ecc_to_h5()
         self.h5.close()
                 
     def delete_h5(self):
