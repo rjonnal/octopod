@@ -319,9 +319,8 @@ class Window(QtGui.QWidget):
         self.h5['dispersion'].create_dataset('coefficients',data=self.dispersion_coefs)
         self.h5['dispersion'].create_dataset('old_coefficients',data=old_coefs)
 
-        print self.h5['dispersion']['coefficients'][:]
-        print self.h5['dispersion']['old_coefficients'][:]
-            
+        
+
     def show_bscan(self,index=None):
         if index is None:
             index = self.index
