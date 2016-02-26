@@ -4,6 +4,7 @@ HDF5 to SQL, we could implement it quickly.
 '''
 
 import h5py
+import os
 import logging
 logging.basicConfig(level='INFO')
 
@@ -24,6 +25,11 @@ class DataStore:
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating %s object.'%__name__)
 
+
+    def close(self):
+        '''Close interface to this data store.'''
+        pass
+    
     def put(self,location,data,short_descriptor=None):
         '''Put some data into the store.
 
@@ -69,14 +75,11 @@ class DataStore:
         '''
 
 
-    def close(self):
-        pass
-
 class H5(DataStore):
     
     def __init__(self,filename):
         DataStore.__init__(self,filename)
-        self.h5 = h5py(filename)
+        self.h5 = h5py.File(filename)
 
     def put(self,location,data,short_descriptor=None):
         try:
@@ -85,9 +88,30 @@ class H5(DataStore):
             pass
 
         self.h5.create_dataset(location,data=data)
+        self.write_descriptor(location,short_descriptor)
 
 
-    def make(self,dims,dtype=''):
+    def make(self,location,dims,dtype='f8',short_descriptor=None):
+        #"<i1", "<i2", "<i4", "<i8", ">i1", ">i2", ">i4", ">i8", "|i1", "|u1", 
+        #"<u1", "<u2", "<u4", "<u8", ">u1", ">u2", ">u4", ">u8",
+        #"<f4", "<f8", ">f4", ">f8", "<c8", "<c16", ">c8", ">c16",
+        #"|S1", "|S2", "|S33", "|V1", "|V2", "|V33"]
+        try:
+            del self.h5[location]
+        except Exception as e:
+            pass
+
+        self.h5.create_dataset(location,dims,dtype=dtype)
         
+        return self.h5[location]
 
+    def get(self,location):
+        return self.h5[location][...]
     
+    def close(self):
+        self.h5.close()
+    
+    def write_descriptor(self,location,descriptor):
+        if descriptor is not None:
+            location = '%s_IS_%s'%(location,descriptor.replace(' ','_'))
+            self.put(location,[1])

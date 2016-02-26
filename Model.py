@@ -6,6 +6,7 @@ import scipy as sp
 from matplotlib import pyplot as plt
 from utils import translation,autotrim_bscan,find_peaks
 import logging
+import octopod_config as ocfg
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -172,10 +173,6 @@ class Model:
             self.profile[z2+1:] = 0.0
             self.write_profile(self.profile)
             
-        plt.cla()
-        plt.plot(self.profile)
-        plt.pause(3)
-        plt.close()
 
 
     def get_label_dict(self):
@@ -294,4 +291,23 @@ class Model:
 
         
         mdb = h5py.File(ocfg.model_database)
+        did = self.h5['IDs']['dataset_id'].value
+        # did is the primary key for the model, but we'll also save eccentricity
+        did_key = '%d'%did
+        try:
+            del mdb[did_key]
+        except:
+            pass
+        mdb.require_group[did_key]
+        si = self.h5['eccentricity']['superior_inferior'].value
+        nt = self.h5['eccentricity']['nasal_temporal'].value
+        radial_distance = np.sqrt(si**2+nt**2)
+        
+        mdb[did_key].create_dataset('superior_inferior',data=si)
+        mdb[did_key].create_dataset('nasal_temporal',data=nt)
+        mdb[did_key].create_dataset('radial_distance',data=radial_distance)
+        mdb[did_key].create_dataset('profile',data=self.profile)
+        mdb[did_key].create_group('labels')
+        for key in label_dict.keys():
+            mdb[did_key]['labels'].create_dataset(key, label_dict[key])
         
