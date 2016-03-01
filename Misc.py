@@ -1,4 +1,4 @@
-import h5py
+from octopod.DataStore import H5
 import hashlib,os
 import numpy as np
 
@@ -23,16 +23,11 @@ class EccentricityGuesser:
 
         si_ecc,nt_ecc = self.guess(h5filename)
         
-        h5 = h5py.File(h5filename)
-        try:
-            del h5['eccentricity']
-        except Exception as e:
-            pass
-
-        h5.create_group('eccentricity')
-        h5['eccentricity'].create_dataset('superior_inferior',data=si_ecc)
-        h5['eccentricity'].create_dataset('nasal_temporal',data=nt_ecc)
-        h5['eccentricity'].create_dataset('superior_and_nasal_are_negative',data=[np.nan])
+        h5 = H5(h5filename)
+        h5.require_group('eccentricity')
+        h5.put('eccentricity/superior_inferior',si_ecc)
+        h5.put('eccentricity/nasal_temporal',nt_ecc)
+        h5.put('eccentricity/superior_and_nasal_are_negative',[np.nan])
     
     def search_for_eccentricity(self,token,index):
         '''Try to convert characters just before index into a number.'''
@@ -107,7 +102,7 @@ class EccentricityGuesser:
 
 class IDGenerator:
 
-    def create_ids(self,h5filename,subject_name,acquisition_date):
+    def create_ids(self,h5,subject_name,acquisition_date):
         # we need three ids in each hdf5 file: subject id, experiment id, and dataset id
         # we'll generate these by hashing the subject's name in Last_First format, a combination
         # of the name and date in YYYYMMDD format, and the first b-scan in the first volume of this dataset,
@@ -121,28 +116,31 @@ class IDGenerator:
         subject_id = string_to_id(subject_name)
         experiment_id = string_to_id(subject_name+acquisition_date)
         
-        h5 = h5py.File(h5filename)
-
-        test_frame = h5['raw_data'][0,0,:,:]
+        test_frame = h5.get('raw_data')[0,0,:,:]
         dataset_id = string_to_id(test_frame)
 
-        try:
-            del h5['IDs']
-        except Exception as e:
-            pass
-
-        h5.create_group('IDs')
-        h5['IDs'].create_dataset('subject_id',data=subject_id)
-        h5['IDs'].create_dataset('experiment_id',data=experiment_id)
-        h5['IDs'].create_dataset('dataset_id',data=dataset_id)
-
-        try:
-            del h5['acquisition_date']
-        except Exception as e:
-            pass
-
-        h5.create_dataset('acquisition_date',data=int(acquisition_date))
+        h5.require_group('IDs')
+        h5.put('IDs/subject_id',subject_id)
+        h5.put('IDs/experiment_id',experiment_id)
+        h5.put('IDs/dataset_id',dataset_id)
+        h5.put('acquisition_date',int(acquisition_date))
 
         #for key in h5['IDs'].keys():
             #print key,h5['IDs'][key].value
         #print h5['acquisition_date'].value
+
+
+def test():
+    h5filename = './oct_test_volume/oct_test_volume_2T.hdf5'
+    eg = EccentricityGuesser()
+    print 'Eccentricity guess: ',eg.guess(h5filename)
+    eg.guess_to_h5(h5filename)
+    h5 = H5(h5filename)
+
+    idg = IDGenerator()
+    idg.create_ids(h5,'jones_stick','20160202')
+    
+        
+if __name__=='__main__':
+    test()
+

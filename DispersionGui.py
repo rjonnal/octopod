@@ -308,6 +308,11 @@ class Window(QtGui.QWidget):
         old_coefs = self.h5.get('dispersion/coefficients')
         self.h5.put('dispersion/coefficients',self.dispersion_coefs)
         self.h5.put('dispersion/old_coefficients',old_coefs)
+
+        ddb = H5(ocfg.dispersion_database)
+        did = self.h5.get('IDs/dataset_id')[()]
+        did_key = '%d'%did
+        ddb.put(did_key,self.dispersion_coefs)
         
 
     def show_bscan(self,index=None):

@@ -82,8 +82,14 @@ class H5(DataStore):
         self.h5 = h5py.File(filename)
 
 
-    def __getitem__(self,key):
-        return self.get(key)
+    def keys(self):
+        return self.h5.keys()
+
+    # While convenient, implementation of getitem greatly reduces the flexibility of
+    # the DataStore object, since alternative implementations (e.g. SQl) won't have
+    # dictionary behavior by default.
+    #def __getitem__(self,key):
+    #    return self.get(key)
 
     def put(self,location,data,short_descriptor=None):
         try:
@@ -113,7 +119,7 @@ class H5(DataStore):
         return self.h5[location]
 
     def get(self,location):
-        return self.h5[location][...]
+        return self.h5[location]
     
     def close(self):
         self.h5.close()

@@ -76,6 +76,6 @@ class DispersionOptimizer:
 
 if __name__=='__main__':
 
-    do = DispersionOptimizer('./oct_test_volume/oct_test_volume.hdf5')
+    do = DispersionOptimizer('./oct_test_volume/oct_test_volume_2T.hdf5')
     test_frame = do.make_test_frame()
     print do.optimize(test_frame)

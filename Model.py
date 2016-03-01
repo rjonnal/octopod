@@ -1,10 +1,10 @@
 import sys,os
-import h5py
 import logging
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
 from utils import translation,autotrim_bscan,find_peaks
+from octopod.Misc import H5
 import logging
 import octopod_config as ocfg
 logging.basicConfig(level=logging.DEBUG)
@@ -26,12 +26,12 @@ class Model:
         at least one volume."""
         self.logger = logging.getLogger(__name__)
         if type(h5)==str:
-            self.h5 = h5py.File(h5)
+            self.h5 = H5(h5)
             self.logger.info('Opening file %s.'%self.h5)
         else:
             self.h5 = h5
         try:
-            self.profile = self.h5['model']['profile'][:]
+            self.profile = self.h5.get('model/profile')[:]
         except Exception as e:
             self.logger.info('Model does not exist in h5 file.')
             self.profile = self.make_model(debug=debug)
@@ -41,7 +41,7 @@ class Model:
         
     def make_model(self,vidx=0,debug=False):
         self.logger.info('Making model...')
-        avol = np.abs(self.h5['processed_data'][vidx,:,:,:])
+        avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
         nSlow,nFast,nDepth = avol.shape
         
         if False:
@@ -133,19 +133,12 @@ class Model:
 
         model_profile = np.mean(template/counter,axis=1)
         
-        self.h5.require_group('model')
-
         self.write_profile(model_profile)
-        
         return model_profile
 
     def write_profile(self,model_profile):
-        try:
-            del self.h5['/model/profile']
-        except Exception as e:
-            pass
-
-        self.h5['model'].create_dataset('profile',data=model_profile)
+        self.h5.require_group('model')
+        self.h5.put('model/profile',model_profile)
 
     def click_crop(self):
         global clicks
@@ -178,13 +171,14 @@ class Model:
     def get_label_dict(self):
         out = {}
         try:
-            for key in self.h5['model/labels'].keys():
-                out[key] = self.h5['model/labels'][key]
+            for key in self.h5.get('model/labels').keys():
+                out[key] = self.h5.get('model/labels')[key]
         except Exception as e:
             print e
         return out
 
-
+    def clear_labels(self):
+        self.h5.delete('model/labels')
 
     def click_label(self,smoothing=5):
         if smoothing>1:
@@ -279,35 +273,40 @@ class Model:
         plot_at(current_x)
         
         plt.show()
-        
-        try:
-            del self.h5['/model/labels']
-        except Exception as e:
-            pass
 
-        self.h5['model'].create_group('labels')
+        self.h5.require_group('model')
+        self.h5.require_group('model/labels')
         for key in label_dict.keys():
-            self.h5['model/labels'].create_dataset(key,data=label_dict[key])
-
-        
-        mdb = h5py.File(ocfg.model_database)
-        did = self.h5['IDs']['dataset_id'].value
+            self.h5.put('model/labels/%s'%key,label_dict[key])
+            
+        mdb = H5(ocfg.model_database)
+        did = self.h5.get('IDs/dataset_id').value
         # did is the primary key for the model, but we'll also save eccentricity
         did_key = '%d'%did
-        try:
-            del mdb[did_key]
-        except:
-            pass
-        mdb.require_group[did_key]
-        si = self.h5['eccentricity']['superior_inferior'].value
-        nt = self.h5['eccentricity']['nasal_temporal'].value
+        mdb.require_group(did_key)
+
+        si = self.h5.get('eccentricity/superior_inferior').value
+        nt = self.h5.get('eccentricity/nasal_temporal').value
+        
         radial_distance = np.sqrt(si**2+nt**2)
-        
-        mdb[did_key].create_dataset('superior_inferior',data=si)
-        mdb[did_key].create_dataset('nasal_temporal',data=nt)
-        mdb[did_key].create_dataset('radial_distance',data=radial_distance)
-        mdb[did_key].create_dataset('profile',data=self.profile)
-        mdb[did_key].create_group('labels')
+
+        mdb.put('%s/superior_inferior'%did_key,si)
+        mdb.put('%s/nasal_temporal'%did_key,nt)
+        mdb.put('%s/radial_distance'%did_key,radial_distance)
+        mdb.put('%s/profile'%did_key,self.profile)
+
+        mdb.require_group('%s/labels'%did_key)
         for key in label_dict.keys():
-            mdb[did_key]['labels'].create_dataset(key, label_dict[key])
+            mdb.put('%s/labels/%s'%(did_key,key),label_dict[key])
         
+
+
+def test():
+    h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
+    m = Model(h5,True)
+    m.clear_labels()
+    m.click_crop()
+    m.click_label()
+    
+if __name__=='__main__':
+    test()

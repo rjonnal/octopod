@@ -1,5 +1,5 @@
 import sys,os
-import h5py
+from octopod.Misc import H5
 import logging
 import numpy as np
 import scipy as sp
@@ -38,98 +38,39 @@ class Processor:
         self.cleanup()
 
     def cleanup(self):
-        try:
-            del self.h5[self.post_dataset]
-        except Exception as e:
-            pass
+        self.h5.delete(self.post_dataset)
 
 
     def run(self):
         # now do something interesting!
         pass
 
-class ProcessorCopyRaw(Processor):
-    """A toy subclass of Processor."""
-    def __init__(self,h5):
-        Processor.__init__(self,h5,pre_dataset='/raw_data',post_dataset='/copy_of_raw')
-        #self.pre_dataset = pre_dataset
-        #self.post_dataset = post_dataset
-        
-    def run(self):
-        n_vol,n_slow,n_fast,n_depth = self.h5[self.pre_dataset].shape
-
-        self.h5.create_dataset(self.post_dataset,(n_vol,n_slow,n_fast,n_depth))
-        for i_vol in range(n_vol):
-            self.h5[self.post_dataset][i_vol] = self.h5[self.pre_dataset][i_vol]
-
 class OCTProcessor(Processor):
     def __init__(self,h5):
         Processor.__init__(self,h5,pre_dataset='/raw_data',post_dataset='/processed_data')
-        self.k_in = self.h5['k_in']
-        self.k_out = self.h5['k_out']
+        self.k_in = self.h5.get('k_in')
+        self.k_out = self.h5.get('k_out')
 
     def run(self):
-        n_vol,n_slow,n_fast,n_depth = self.h5[self.pre_dataset].shape
+        n_vol,n_slow,n_fast,n_depth = self.h5.get(self.pre_dataset).shape
         out_block = np.zeros((n_vol,n_slow,n_depth/2,n_fast),dtype=np.complex64)
-        c = self.h5['dispersion/coefficients'][:]
+        c = self.h5.get('dispersion/coefficients')[:]
         for v in range(n_vol):
             for s in range(n_slow):
                 print s
-                frame = self.h5['raw_data'][v][s]
+                frame = self.h5.get('raw_data')[v][s]
                 frame[0,:] = frame[1,:]
                 test_frame = process(frame,self.k_in,self.k_out,c)
                 out_block[v,s,:,:] = test_frame
 
-        self.h5.create_dataset(self.post_dataset,data=out_block,dtype='c8')
-        plt.imshow(np.abs(self.h5['processed_data'][0][10]),aspect='auto',interpolation='none')
+        self.h5.put(self.post_dataset,out_block)
+        plt.imshow(np.abs(self.h5.get('processed_data')[0][10]),aspect='auto',interpolation='none')
         plt.pause(1)
 
-class CoarseRegistrationProcessorUnfinished(Processor):
-    def __init__(self,h5):
-        Processor.__init__(self,h5,pre_dataset='/processed_data',post_dataset='/registration/coarse_coordinates')
-        try:
-            self.h5.create_group('registration')
-        except Exception as e:
-            pass
-    
-    def run(self):
-        if False:# testing
-            temp = np.random.rand(100,100)
-            t1 = temp[:80,:80]
-            t2 = temp[20:,20:]
-            print translation(t1,t2)
-            sys.exit()
 
-        
-        n_vol,n_slow,n_fast,n_depth = self.h5[self.pre_dataset].shape
-        def test(idx1,idx2,tx,ty,goodness):
-            d = np.sqrt(tx**2+ty**2)
-            return d<(20*(idx2-idx1)) and goodness>.01
-        if os.path.exists('temp.npy'):
-            reg_data = np.load('temp.npy')
-        else:
-            reg_data = []
-            for v in range(n_vol):
-                idx1 = 0
-                idx2 = 1
-                while idx2<n_slow:
-                    f1 = np.abs(self.h5['processed_data'][v][idx1])
-                    f2 = np.abs(self.h5['processed_data'][v][idx2])
-                    tx,ty,goodness = translation(f1,f2)
-                    if test(idx1,idx2,tx,ty,goodness):
-                        reg_data.append([idx1,idx2,tx,ty,goodness])
-                        idx1 = idx2
-                        idx2 = idx2+1
-                    else:
-                        idx2 = idx2+1
-                    print idx1,idx2,tx,ty,goodness
-            np.save('temp.npy',reg_data)
+if __name__=='__main__':
 
-        reg_data = np.array(reg_data)
-        print reg_data
-        plt.plot(reg_data[:,2])
-        plt.plot(reg_data[:,3])
-        plt.plot(reg_data[:,4]*1000)
-        plt.show()
-        sys.exit()
-        
+    h5fn = './oct_test_volume/oct_test_volume_2T.hdf5'
+    h5 = H5(h5fn)
+    op = OCTProcessor(h5)
+    op.run()

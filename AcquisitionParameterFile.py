@@ -91,11 +91,12 @@ class AcquisitionParameterFile:
             fid.write(self.params_to_xml(test))
         
             
-            
-    
-if __name__=='__main__':
-    apfn = os.path.join('testing','2015-11-17-16-21-01-RE_3TR_0SR_20def_1.xml')
-    h5 = H5('./testing/foo.hdf5')
+def test():            
+    apfn = os.path.join('./oct_test_volume/oct_test_volume_2T.xml')
+    h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
     apr = AcquisitionParameterFile()
     apr.translate_xml_to_h5(apfn,h5)
-
+    
+if __name__=='__main__':
+    test()
+    
