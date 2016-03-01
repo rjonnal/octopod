@@ -81,6 +81,10 @@ class H5(DataStore):
         DataStore.__init__(self,filename)
         self.h5 = h5py.File(filename)
 
+
+    def __getitem__(self,key):
+        return self.get(key)
+
     def put(self,location,data,short_descriptor=None):
         try:
             del self.h5[location]
@@ -91,6 +95,9 @@ class H5(DataStore):
         self.write_descriptor(location,short_descriptor)
 
 
+    def require_group(self,location):
+        self.h5.require_group(location)
+        
     def make(self,location,dims,dtype='f8',short_descriptor=None):
         #"<i1", "<i2", "<i4", "<i8", ">i1", ">i2", ">i4", ">i8", "|i1", "|u1", 
         #"<u1", "<u2", "<u4", "<u8", ">u1", ">u2", ">u4", ">u8",
@@ -115,3 +122,13 @@ class H5(DataStore):
         if descriptor is not None:
             location = '%s_IS_%s'%(location,descriptor.replace(' ','_'))
             self.put(location,[1])
+
+    def write_attribute(self,group,attr_key,attr_value):
+        self.h5.require_group(group)
+        self.h5[group].attrs[attr_key] = attr_value
+
+    def delete(self,key):
+        try:
+            del self.h5[key]
+        except Exception as e:
+            pass

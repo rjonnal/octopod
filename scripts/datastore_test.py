@@ -15,7 +15,7 @@ def info(item):
     print type(item)
     print item
     
-info(h5.get('blah/arr'))
+info(h5.get('/arr'))
 info(h5.get('blah/val'))
 
 

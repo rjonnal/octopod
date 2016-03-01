@@ -281,12 +281,13 @@ class Window(QtGui.QWidget):
             self.working_dir,junk = os.path.split(fname)
             self.index = 10
             self.statusbar.showMessage('Working file: %s'%fname)
-            self.h5 = h5py.File(fname)
-            self.dispersion_optimizer = DispersionOptimizer(self.h5)
-            self.raw_vol = self.h5['raw_data'][0,:,:,:]
-            self.k_in = self.h5['k_in'][:]
-            self.k_out = self.h5['k_out'][:]
-            self.dispersion_coefs = self.h5['dispersion']['coefficients'][:]
+            self.h5 = H5(fname)
+            self.dispersion_optimizer = DispersionOptimizer(fname)
+            self.raw_vol = self.h5.get('raw_data')[0,:,:,:]
+            self.k_in = self.h5.get('k_in')
+            self.k_out = self.h5.get('k_out')
+            self.dispersion_coefs = self.h5.get('dispersion/coefficients')
+            
             self.coef_3_min = self.dispersion_coefs[0]
             self.coef_3_max = self.dispersion_coefs[0]
             self.coef_2_min = self.dispersion_coefs[1]
@@ -304,21 +305,9 @@ class Window(QtGui.QWidget):
             self.show_bscan()
             
     def write_coefs(self):
-        old_coefs = self.h5['dispersion']['coefficients'][:]
-        try:
-            del self.h5['dispersion']['coefficients']
-        except Exception as e:
-            print '1',e
-        
-        
-        try:
-            del self.h5['dispersion']['old_coefficients']
-        except Exception as e:
-            print '2',e
-            
-        self.h5['dispersion'].create_dataset('coefficients',data=self.dispersion_coefs)
-        self.h5['dispersion'].create_dataset('old_coefficients',data=old_coefs)
-
+        old_coefs = self.h5.get('dispersion/coefficients')
+        self.h5.put('dispersion/coefficients',self.dispersion_coefs)
+        self.h5.put('dispersion/old_coefficients',old_coefs)
         
 
     def show_bscan(self,index=None):

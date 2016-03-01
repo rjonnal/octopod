@@ -1,7 +1,8 @@
-import h5py,os,sys
+import os,sys
 from bs4 import BeautifulSoup
 from datetime import datetime
 import logging
+from octopod.DataStore import H5
 
 class AcquisitionParameterFile:
     
@@ -28,9 +29,8 @@ class AcquisitionParameterFile:
     
     def translate_xml_to_h5(self,fn,h5):
         self.logger.info('Creating "config" group in h5 file.')
-        h5.require_group('config')
 
-        h5['config'].attrs['filename'] = fn
+        h5.write_attribute('config','filename',fn)
 
         fid = open(fn,'rb')
         soup = BeautifulSoup(fid.read(),"html.parser")
@@ -43,11 +43,7 @@ class AcquisitionParameterFile:
                     try:
                         h5key,op = self.xml_dict[key]
                         h5val = op(xml.attrs[key])
-                        try:
-                            del h5['config'][h5key]
-                        except Exception as e:
-                            pass
-                        h5['config'].create_dataset(h5key,data=h5val)
+                        h5.put('config/%s'%h5key,h5val)
                         self.logger.info('Setting variable %s to %s.'%(h5key,h5val))
                     except Exception as e:
                         self.logger.error(e)
@@ -99,7 +95,7 @@ class AcquisitionParameterFile:
     
 if __name__=='__main__':
     apfn = os.path.join('testing','2015-11-17-16-21-01-RE_3TR_0SR_20def_1.xml')
-    f = h5py.File('./testing/foo.hdf5','w')
-    apr = AcquisitionParameterReader()
-    apr.translate_xml_to_h5(apfn,f)
+    h5 = H5('./testing/foo.hdf5')
+    apr = AcquisitionParameterFile()
+    apr.translate_xml_to_h5(apfn,h5)
 

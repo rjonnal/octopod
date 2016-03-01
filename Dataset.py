@@ -1,10 +1,11 @@
 import sys,os
-import h5py
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
 import logging
-from AcquisitionParameterFile import AcquisitionParameterFile
+from octopod.AcquisitionParameterFile import AcquisitionParameterFile
+from octopod.DataStore import H5
+from octopod.H5Utils import EccentricityGuesser
 import octopod_config as ocfg
 
 
@@ -20,27 +21,21 @@ class Dataset:
         self.xml_fn = raw_temp + '.xml'
 
     def get_h5_handle(self):
-        return h5py.File(self.h5fn)
-
+        return self.h5
 
     def ecc_to_h5(self):
         eg = EccentricityGuesser()
         si_ecc,nt_ecc = eg.guess(self.raw_data_filename)
-        
-        try:
-            del self.h5['eccentricity']
-        except Exception as e:
-            pass
 
-        self.h5.create_group('eccentricity')
-        self.h5['eccentricity'].create_dataset('superior_inferior',data=si_ecc)
-        self.h5['eccentricity'].create_dataset('nasal_temporal',data=nt_ecc)
-        self.h5['eccentricity'].create_dataset('superior_and_nasal_are_negative',data=[np.nan])
+        self.h5.delete('eccentricity')
+        self.h5.put('eccentricity/superior_infierior',si_ecc)
+        self.h5.put('eccentricity/nasal_temporal',si_ecc)
+        self.h5.put('eccentricity/superior_and_nasal_are_negative',[np.nan])
         
 
     def initialize(self,system_label):
 
-        self.h5 = h5py.File(self.h5fn,'w')
+        self.h5 = H5(self.h5fn)
 
         # write parameters from the XML file to the h5 file
         apf = AcquisitionParameterFile()
@@ -51,11 +46,7 @@ class Dataset:
         n_fast = self.h5['/config/n_fast'][()]
         n_depth = self.h5['/config/n_depth'][()]
 
-        try:
-            del self.h5['raw_data']
-        except Exception as e:
-            pass
-        self.h5.create_dataset('raw_data',(n_vol,n_slow,n_fast,n_depth),dtype='u2')
+        raw_store = self.h5.make('raw_data',(n_vol,n_slow,n_fast,n_depth),dtype='u2')
 
         with open(self.raw_data_filename,'rb') as fid:
             for vol_index in range(n_vol):
@@ -63,7 +54,7 @@ class Dataset:
                 fid.seek(position,0)
                 vol = np.fromfile(fid,dtype=np.uint16,count=n_slow*n_depth*n_fast)
                 vol = vol.reshape(n_slow,n_fast,n_depth)
-                self.h5['raw_data'][vol_index,:,:,:] = vol
+                raw_store[vol_index,:,:,:] = vol
 
         L0 = ocfg.source_spectra[system_label]['L0']
         dL = ocfg.source_spectra[system_label]['dL']
@@ -71,25 +62,16 @@ class Dataset:
         self.k_in = (2.0*np.pi)/self.L
         self.k_out = np.linspace(self.k_in[0],self.k_in[-1],n_depth)
 
-        self.h5overwrite('L',self.L)
-        self.h5overwrite('k_in',self.k_in)
-        self.h5overwrite('k_out',self.k_out)
-        self.h5overwrite('system_label',system_label)
+        self.h5.put('L',self.L)
+        self.h5.put('k_in',self.k_in)
+        self.h5.put('k_out',self.k_out)
+        self.h5.put('system_label',system_label)
 
         self.ecc_to_h5()
         self.h5.close()
                 
-    def delete_h5(self):
-        if os.path.exists(self.h5fn):
-            self.logger.info('Deleting h5 file %s.'%self.h5fn)
-            try:
-                os.remove(self.h5fn)
-            except Exception as e:
-                self.logger.info(e.message)
 
-    def h5overwrite(self,key,value):
-        try:
-            del self.h5[key]
-        except:
-            pass
-        self.h5.create_dataset(key,data=value)
+if __name__=='__main__':
+
+    ds = Dataset('./oct_test_volume/oct_test_volume.unp')
+    ds.initialize('2g_aooct')
