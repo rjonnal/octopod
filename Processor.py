@@ -7,6 +7,8 @@ from matplotlib import pyplot as plt
 from utils import translation,autotrim_bscan
 
 def process(frame,k_in,k_out,dispersion_coefficients):
+    if len(dispersion_coefficients)==2:
+        sys.exit('process: did you mean to send 2 dispersion values only?')
     test_frame = frame - np.mean(frame,axis=0)
     test_frame = test_frame.T
     k_interpolator = sp.interpolate.interp1d(k_in,test_frame,axis=0,copy=False)

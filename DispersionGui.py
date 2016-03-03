@@ -12,7 +12,8 @@ from time import time,sleep
 
 logging.basicConfig(level=logging.DEBUG)
 
-Z_CUTOFF = 700
+Z_CUTON = 700
+Z_CUTOFF = 1000
 X_START = 2
 N_STEPS = 3
 
@@ -75,7 +76,7 @@ class Window(QtGui.QWidget):
                 try:
                     test = self.proc_cache[(index,c3,c2)]
                 except KeyError as ke:
-                    test = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,coefs)[Z_CUTOFF:,X_START:]).T
+                    test = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,coefs)[Z_CUTON:Z_CUTOFF,X_START:]).T
                     self.proc_cache[(index,c3,c2)] = test
                 score = obj(test)
                 scores[idx3,idx2] = score
@@ -134,7 +135,7 @@ class Window(QtGui.QWidget):
                     try:
                         test = self.proc_cache[(index,c3,c2)]
                     except KeyError as ke:
-                        test = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,coefs)[Z_CUTOFF:,X_START:]).T
+                        test = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,coefs)[Z_CUTON:Z_CUTOFF,X_START:]).T
                         self.proc_cache[(index,c3,c2)] = test
                     score = obj(test)
                     if score>best_score:
@@ -321,7 +322,7 @@ class Window(QtGui.QWidget):
         try:
             self.bscan = self.proc_cache[(index,self.dispersion_coefs[0],self.dispersion_coefs[1])]
         except KeyError as ke:
-            self.bscan = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,self.dispersion_coefs)[Z_CUTOFF:,X_START:]).T
+            self.bscan = np.abs(process(self.raw_vol[index,:,:],self.k_in,self.k_out,self.dispersion_coefs)[Z_CUTON:Z_CUTOFF,X_START:]).T
             self.proc_cache[(index,self.dispersion_coefs[0],self.dispersion_coefs[1])] = self.bscan
         self.compute_stats()
         self.set_coef_labels()
