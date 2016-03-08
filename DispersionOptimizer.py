@@ -9,8 +9,8 @@ from octopod.DataStore import H5
 
 class DispersionOptimizer:
 
-    def __init__(self,h5fn):
-        self.h5 = H5(h5fn)
+    def __init__(self,h5):
+        self.h5 = h5
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating DispersionOptimizer object.')
 
@@ -49,16 +49,19 @@ class DispersionOptimizer:
         print out
         return out
 
-    def optimize(self,test_frame,dry_run=False):
+    def optimize(self,test_frame=None,dry_run=False):
+        if test_frame is None:
+            test_frame = self.make_test_frame(1000)
+            
         obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub)
         c_sub0 = [0.0,0.0]
-        bounds3 = [c_sub0[0]-1e-16,c_sub0[0]+1e-16]
-        bounds2 = [c_sub0[1]-1e-10,c_sub0[1]+1e-10]
+        bounds3 = [c_sub0[0]-1e-17,c_sub0[0]+1e-17]
+        bounds2 = [c_sub0[1]-1e-11,c_sub0[1]+1e-11]
         
         result = optimize.brute(obj,(bounds3,bounds2),Ns=11,finish=None)
         
-        bounds3a = (result[0]-1e-17,result[0]+1e-17)
-        bounds2a = (result[1]-1e-11,result[1]+1e-11)
+        bounds3a = (result[0]-1e-18,result[0]+1e-18)
+        bounds2a = (result[1]-1e-12,result[1]+1e-12)
         result = optimize.brute(obj,(bounds3a,bounds2a),Ns=11,finish=None)
         
         c = [result[0],result[1],0.0,0.0]

@@ -50,6 +50,7 @@ class Processor:
 class OCTProcessor(Processor):
     def __init__(self,h5):
         Processor.__init__(self,h5,pre_dataset='/raw_data',post_dataset='/processed_data')
+        print self.h5.h5
         self.k_in = self.h5.get('k_in')
         self.k_out = self.h5.get('k_out')
 

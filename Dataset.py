@@ -7,6 +7,7 @@ from octopod.AcquisitionParameterFile import AcquisitionParameterFile
 from octopod.DataStore import H5
 from octopod.Misc import EccentricityGuesser, IDGenerator
 from octopod.Processor import OCTProcessor
+from octopod.DispersionOptimizer import DispersionOptimizer
 import octopod_config as ocfg
 
 
@@ -58,6 +59,10 @@ class Dataset:
     def process(self):
         op = OCTProcessor(self.h5)
         op.run()
+
+    def optimize_dispersion(self):
+        do = DispersionOptimizer(self.h5)
+        do.optimize()
         
     def initialize(self,system_label):
 
@@ -97,7 +102,6 @@ class Dataset:
         
         self.ecc_to_h5()
         self.make_ids()
-        self.h5.close()
                 
 
 def test():
