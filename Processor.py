@@ -67,7 +67,7 @@ class OCTProcessor(Processor):
 
         self.h5.put(self.post_dataset,out_block)
         plt.imshow(np.abs(self.h5.get('processed_data')[0][10]),aspect='auto',interpolation='none')
-        plt.pause(1)
+        plt.pause(.0001)
 
 
 if __name__=='__main__':

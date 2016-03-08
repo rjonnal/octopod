@@ -23,7 +23,7 @@ prof = np.mean(im,axis=0)
 #prof[np.where(prof<thresh)]=0
 
 
-if False:
+if True:
     # in this section, the peaks are manually compared with Ocean Optics specs
     # in order to pair the expected peaks in ocean_optics_argon_lines.txt (750.387...)
     # with the peaks in the acquired image.
@@ -56,10 +56,17 @@ p2 = np.polyfit(pixel,wavelength,2)
 
 pixels = np.arange(2048)
 p1_fit = np.polyval(p1,pixels)
+print p1
 p2_fit = np.polyval(p2,pixels)
 
-plt.plot(pixels,p1_fit,'k--')
-plt.plot(pixels,p2_fit,'b:')
-plt.plot(pixel,wavelength,'rs')
+label_data = 'data'
+label_1 = '$\lambda = %0.2e x + %0.2e$'%tuple(p1)
+label_2 = '$\lambda = %0.2e x^2 + %0.2e x + %0.2e$'%tuple(p2)
+
+plt.plot(pixels,p1_fit,'k--',label=label_1)
+plt.plot(pixels,p2_fit,'b:',label=label_2)
+plt.plot(pixel,wavelength,'rs',label=label_data)
+
+plt.legend()
 
 plt.show()

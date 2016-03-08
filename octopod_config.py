@@ -16,8 +16,23 @@ raw_data_extension = 'unp'
 raw_bytes_per_pixel = 2
 
 source_spectra = {}
-source_spectra['hroct'] = {'L0':801e-9,'dL':6.2e-11}
-source_spectra['2g_aooct'] = {'L0':920e-9,'dL':-9.5e-11}
+
+# old approach, with explicit L0 and dL terms
+# source_spectra['hroct'] = {'L0':801e-9,'dL':6.2e-11}
+# original values, from note on table:
+# source_spectra['2g_aooct'] = {'L0':920e-9,'dL':-9.5e-11}
+# values using ocean optics calibration procedure
+# (see octopod/scripts/calibration for details)
+# source_spectra['2g_aooct'] = {'L0':890e-9,'dL':-7.03e-11}
+
+# new approach: assign a list of length k, [c_{k-1}, c_{k-2}, ... c_0],
+# specifying the polynomial lambda = c_{k-1} x^{k-1} + c_{k-2} x^{k-2} + ... c_0,
+# where the polynomial maps pixel number (x) onto wavelength (lambda).
+# See numpy.polyval for identical interpretation of coefficient lists.
+source_spectra['hroct'] = [6.2e-11,801e-9]
+source_spectra['2g_aooct'] = [-6.79e-11,8.86e-7]
+source_spectra['2g_aooct'] = [-1.82e-15,-6.31e-11,8.83e-7]
+
 
 dc_cutoff = 20
 

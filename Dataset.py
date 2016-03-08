@@ -6,6 +6,7 @@ import logging
 from octopod.AcquisitionParameterFile import AcquisitionParameterFile
 from octopod.DataStore import H5
 from octopod.Misc import EccentricityGuesser, IDGenerator
+from octopod.Processor import OCTProcessor
 import octopod_config as ocfg
 
 
@@ -46,12 +47,17 @@ class Dataset:
             fid = open(sfn)
             sn = fid.readline().strip()
             fid.close()
+            sn = sn.replace(', ','_')
+            sn = sn.replace(',','_')
         except Exception as e:
             self.logger.warning('No subject_name.txt file found. Using doe_john.')
             sn = 'doe_john'
             
         idg.create_ids(self.h5,sn,at)
 
+    def process(self):
+        op = OCTProcessor(self.h5)
+        op.run()
         
     def initialize(self,system_label):
 
@@ -76,9 +82,9 @@ class Dataset:
                 vol = vol.reshape(n_slow,n_fast,n_depth)
                 raw_store[vol_index,:,:,:] = vol
 
-        L0 = ocfg.source_spectra[system_label]['L0']
-        dL = ocfg.source_spectra[system_label]['dL']
-        self.L = np.arange(n_depth)*dL+L0
+        p = ocfg.source_spectra[system_label] # polynomial for generating dataset's pixel->lambda function
+        
+        self.L = np.polyval(p,np.arange(n_depth))
         self.k_in = (2.0*np.pi)/self.L
         self.k_out = np.linspace(self.k_in[0],self.k_in[-1],n_depth)
 
