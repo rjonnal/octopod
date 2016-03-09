@@ -32,7 +32,24 @@ class DispersionOptimizer:
             test_frame[k,:] = hypercube[v][s][f][:]
         del hypercube
         return test_frame
+
+
+    def get_bright_lines(self,size=100):
+        self.logger.info('Generating a random test frame from bright lines.')
         
+        n_depth = self.h5.get('/config/n_depth')[()]
+        n_fast = self.h5.get('/config/n_fast')[()]
+        n_slow = self.h5.get('/config/n_slow')[()]
+        n_vol = self.h5.get('/config/n_vol')[()]
+        test_frame = np.zeros((size,n_depth))
+        hypercube = np.zeros(self.h5.get('raw_data').shape)
+        hypercube[...] = self.h5.get('raw_data')[...]
+        for k in range(min(size,n_slow)):
+            test = hypercube[0][k][:][:]
+            test = np.abs(test)
+            print test.shape
+        
+    
     def process_frame(self,frame,c):
         test_frame = frame.copy()
         k_in = self.h5.get('k_in')
@@ -40,29 +57,35 @@ class DispersionOptimizer:
         test_frame = process(frame,k_in,k_out,c)
         return test_frame
         
-    def dispersion_objective(self,test_frame,c_sub):
+    def dispersion_objective(self,test_frame,c_sub,log=[]):
         print c_sub,
         c_all = [c_sub[0],c_sub[1],0.0,0.0]
         frame = np.abs(self.process_frame(test_frame,c_all))
         colmax = np.max(frame**2,axis=0)
         out =  1.0/np.mean(colmax)
+        log.append([c_sub[0],c_sub[1],out])
         print out
         return out
 
     def optimize(self,test_frame=None,dry_run=False):
         if test_frame is None:
             test_frame = self.make_test_frame(1000)
-            
-        obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub)
+
+        Ns = 11
+        coarse_log = []
+        fine_log = []
+        
+        obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub,coarse_log)
         c_sub0 = [0.0,0.0]
         bounds3 = [c_sub0[0]-1e-17,c_sub0[0]+1e-17]
         bounds2 = [c_sub0[1]-1e-11,c_sub0[1]+1e-11]
         
-        result = optimize.brute(obj,(bounds3,bounds2),Ns=11,finish=None)
+        result = optimize.brute(obj,(bounds3,bounds2),Ns=Ns,finish=None)
         
+        obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub,fine_log)
         bounds3a = (result[0]-1e-18,result[0]+1e-18)
         bounds2a = (result[1]-1e-12,result[1]+1e-12)
-        result = optimize.brute(obj,(bounds3a,bounds2a),Ns=11,finish=None)
+        result = optimize.brute(obj,(bounds3a,bounds2a),Ns=Ns,finish=None)
         
         c = [result[0],result[1],0.0,0.0]
         objective_value = obj(result)
@@ -73,7 +96,8 @@ class DispersionOptimizer:
             self.h5.put('dispersion/objective_value',objective_value)
             self.h5.put('dispersion/bounds3',np.array(bounds3))
             self.h5.put('dispersion/bounds2',np.array(bounds2))
-        
+            self.h5.put('dispersion/coarse_log',np.array(coarse_log))
+            self.h5.put('dispersion/fine_log',np.array(fine_log))
         return c
     
 
