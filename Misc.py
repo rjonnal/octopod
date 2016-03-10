@@ -65,40 +65,38 @@ class EccentricityGuesser:
             n_ecc.append(self.token_guesser(token,'N'))
             t_ecc.append(self.token_guesser(token,'T'))
 
-
         # defaults in case no ecc is found
-        si_ecc = 0.0
-        nt_ecc = 0.0
+        si_ecc_out = 0.0
+        nt_ecc_out = 0.0
 
         si_done = False
         for s in s_ecc:
             if s is not None:
-                si_ecc = -s
+                si_ecc_out = -s
                 si_done = True
                 break
                 
         if not si_done:
             for i in i_ecc:
                 if i is not None:
-                    si_ecc = i
+                    si_ecc_out = i
                     si_done = True
                     break
 
         nt_done = False
         for n in n_ecc:
             if n is not None:
-                nt_ecc = -n
+                nt_ecc_out = -n
                 nt_done = True
                 break
                 
         if not nt_done:
             for t in t_ecc:
                 if t is not None:
-                    nt_ecc = t
+                    nt_ecc_out = t
                     nt_done = True
                     break
-
-        return si_ecc,nt_ecc
+        return si_ecc_out,nt_ecc_out
 
 class IDGenerator:
 

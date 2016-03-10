@@ -28,10 +28,9 @@ class Dataset:
     def ecc_to_h5(self):
         eg = EccentricityGuesser()
         si_ecc,nt_ecc = eg.guess(self.raw_data_filename)
-
         self.h5.delete('eccentricity')
         self.h5.put('eccentricity/superior_inferior',si_ecc)
-        self.h5.put('eccentricity/nasal_temporal',si_ecc)
+        self.h5.put('eccentricity/nasal_temporal',nt_ecc)
         self.h5.put('eccentricity/superior_and_nasal_are_negative',[np.nan])
         
 

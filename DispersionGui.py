@@ -207,6 +207,8 @@ class Window(QtGui.QWidget):
         self.coef_2_text = QtGui.QDoubleSpinBox()
 
         self.index_text = QtGui.QSpinBox()
+        self.index_text.setMaximum(1000)
+        self.index_text.setMinimum(0)
 
         
 

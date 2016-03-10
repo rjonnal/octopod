@@ -7,14 +7,13 @@ import shutil
 from glob import glob
 import h5py
 
-files = glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.01.29/*.hdf5') + glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.02.02/*.hdf5')
+files = glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2015.11.17/Cane_Edric/RE/*.unp')
 
 for fn in files:
-    h5 = h5py.File(fn)
-    p = OCTProcessor(h5)
-    p.cleanup()
-    p.run()
-    h5.close()
-    
-
+    if not os.path.exists(fn.replace('.unp','.xml')):
+        continue
+    ds = Dataset(fn)
+    ds.initialize('2g_aooct')
+    ds.optimize_dispersion()
+    sys.exit()
 
