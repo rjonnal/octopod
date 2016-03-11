@@ -88,14 +88,7 @@ class Model:
                     continue
             
             target = self.blur(avol[iSlow,:,:])
-            starget = shear(target,2,sameshape=True)
-            # plt.figure()
-            # plt.imshow(target)
-            # plt.figure()
-            # plt.imshow(starget)
-            # plt.show()
-            # sys.exit()
-
+            
             if False:
                 plt.subplot(1,2,1)
                 plt.cla()
@@ -140,6 +133,8 @@ class Model:
 
 
         template = template/counter
+        template0 = template
+        template = shear(template,2)
 
         model_profile = np.mean(template,axis=1)
         
