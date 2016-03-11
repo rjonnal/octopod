@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
-from utils import translation,autotrim_bscan,find_peaks
+from utils import translation,autotrim_bscan,find_peaks,shear
 from octopod.Misc import H5
 import logging
 import octopod_config as ocfg
@@ -88,6 +88,13 @@ class Model:
                     continue
             
             target = self.blur(avol[iSlow,:,:])
+            starget = shear(target,2,sameshape=True)
+            # plt.figure()
+            # plt.imshow(target)
+            # plt.figure()
+            # plt.imshow(starget)
+            # plt.show()
+            # sys.exit()
 
             if False:
                 plt.subplot(1,2,1)
@@ -131,7 +138,10 @@ class Model:
                 plt.plot(np.mean(template/counter,axis=1))
                 plt.pause(.1)
 
-        model_profile = np.mean(template/counter,axis=1)
+
+        template = template/counter
+
+        model_profile = np.mean(template,axis=1)
         
         self.write_profile(model_profile)
         return model_profile

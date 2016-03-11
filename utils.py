@@ -14,6 +14,7 @@ from scipy import ndimage
 from scipy import signal
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import curve_fit
+from numpy.fft import fft,ifft,fftshift
 
 
 def autotrim_bscan(b):
@@ -917,3 +918,140 @@ def threshold(g,sigma,frac,nbins,erosion_diameter):
     gt[np.where(g<gthreshold)] = 0.0
     gto = morphology.grey_erosion(gt,footprint=strel(diameter=erosion_diameter))
     return gto
+
+def nxcorr(vec1,vec2,doPlots=False):
+    '''Given two vectors TARGET and REFERENCE, nxcorr(TARGET,REFERENCE)
+    will return a pair (tuple) of values, (SHIFT, CORR). CORR is a quantity
+    corresponding to the Pearson correlation of the two vectors, accounting
+    for a time delay between the two. Put slightly differently, CORR is the
+    Pearson correlation of the best alignment of the two vectors.
+    SHIFT gives the number of pixels of delay between the two, such that
+    shifting TARGET by SHIFT pixels (rightward for positive, leftward for
+    negative) will produce the optimal alignment of the vectors.'''
+
+    l1 = len(vec1)
+    l2 = len(vec2)
+
+    vec1 = (vec1 - np.mean(vec1))/np.std(vec1)
+    vec2 = (vec2 - np.mean(vec2))/np.std(vec2)
+
+    temp1 = np.zeros([l1+l2-1])
+    temp2 = np.zeros([l1+l2-1])
+
+    temp1[:l1] = vec1
+    temp2[:l2] = vec2
+        
+    nxcval = np.real(fftshift(ifft(fft(temp1)*np.conj(fft(temp2)))))
+    
+    peakVal = np.max(nxcval)
+    peakIdx = np.where(nxcval==peakVal)[0][0]
+
+
+    if False:
+        if l1%2!=l2%2:
+            shift = np.fix(peakIdx-len(nxcval)/2.0)
+        else:
+            shift = np.fix(peakIdx-len(nxcval)/2.0) + 1
+
+    if len(nxcval)%2:
+        shift = (len(nxcval)-1)/2.0 - peakIdx
+    else:
+        shift = len(nxcval)/2.0 - peakIdx
+
+
+
+    if doPlots:
+        plt.figure()
+        plt.subplot(3,1,1)
+        plt.plot(vec1)
+        plt.subplot(3,1,2)
+        plt.plot(vec2)
+        plt.subplot(3,1,3)
+        plt.plot(nxcval)
+        plt.show()
+        sys.exit()
+
+    return shift,peakVal/len(vec1)
+
+def findShift(vec1,vec2):
+    shift,peakVal = nxcorr(vec1,vec2)
+    return shift
+
+def shear(im,order,oversample=1.0,sameshape=False,y1=None,y2=None):
+    sy,sx = im.shape
+    sy0 = sy
+    newsy = int(np.round(float(sy)*float(oversample)))
+
+    if y1 is None:
+        cropY1 = 0
+    else:
+        cropY1 = y1
+
+    if y2 is None:
+        cropY2 = sy
+    else:
+        cropY2 = y2
+
+    imOriginal = np.zeros(im.shape)
+    imOriginal[:] = im[:]
+
+    im = im[cropY1:cropY2,:]
+
+    fim = fft(im,axis=0)
+    fim = fftshift(fim,axes=0)
+    im = np.abs(ifft(fim,axis=0,n=newsy))
+
+    windowSize = 5
+
+    refIdx = 0
+    tarIdx = refIdx
+
+    rx1 = refIdx
+    rx2 = rx1 + windowSize
+
+    tx1 = rx1
+    tx2 = rx2
+
+    xVector = []
+    yVector = []
+
+    ref = im[:,rx1:rx2]
+    ref = np.mean(ref,axis=1)
+
+    while tx2<sx:
+        tar = im[:,tx1:tx2]
+        tar = np.mean(tar,axis=1)
+        shift = -findShift(ref,tar)
+        xVector.append(tx1-rx1)
+        yVector.append(shift)
+        tx1 = tx1 + 1
+        tx2 = tx2 + 1
+
+
+    p = np.polyfit(xVector,yVector,order)
+    newY = np.round(np.polyval(p,range(sx)))
+    newY = newY - np.min(newY)
+
+    
+    newim = np.zeros([newsy+np.max(newY),sx])
+    for ix in range(sx):
+        newim[newY[ix]:newY[ix]+newsy,ix] = im[:,ix]
+
+    newSum = np.sum(newim)
+
+    osy,osx = newim.shape
+
+    outsy = int(float(osy)/float(oversample))
+
+    if oversample!=1.0:
+        newim = imresize(newim,(outsy,sx),interp='bicubic')*oversample
+
+    newim = newim/np.sum(newim)*newSum
+    resampledSum = np.sum(newim)
+
+
+    if sameshape:
+        dy = newim.shape[0] - sy
+        newim = newim[dy/2:dy/2+sy,:]
+
+    return newim
