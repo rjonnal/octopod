@@ -93,7 +93,13 @@ class DispersionOptimizer:
         frame = np.abs(self.process_frame(test_frame,c_all))
         colmax = np.max(frame**2,axis=0)
         out =  1.0/np.mean(colmax)
+        
+        last_pct_done = float(len(log))/float(self.Ns**2)
         log.append([c_sub[0],c_sub[1],out])
+        pct_done = float(len(log))/float(self.Ns**2)
+        if np.floor(pct_done*10)-np.floor(last_pct_done*10):
+            self.logger.info('%d \% done.'%(pct_done*100))
+        
         if do_plot:
             plt.subplot(1,2,1)
             plt.cla()
