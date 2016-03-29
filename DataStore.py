@@ -98,6 +98,7 @@ class H5(DataStore):
             pass
 
         self.h5.create_dataset(location,data=data)
+        self.logger.info('Putting %s into H5 file at %s.'%(self.h5[location],location))
         self.write_descriptor(location,short_descriptor)
 
 

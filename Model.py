@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
-from utils import translation,autotrim_bscan,find_peaks,shear
+from utils import translation,translation1,autotrim_bscan,find_peaks,shear
 from octopod.Misc import H5
 import logging
 import octopod_config as ocfg
@@ -133,7 +133,6 @@ class Model:
 
 
         template = template/counter
-        template0 = template
         template = shear(template,2)
 
         model_profile = np.mean(template,axis=1)
@@ -185,6 +184,16 @@ class Model:
     def clear_labels(self):
         self.h5.delete('model/labels')
 
+
+    def label_aline(self,aline=None):
+        a = np.random.random((16,1))+10
+        b = np.random.random((16,1))+10
+        translation1(a,b)
+        sys.exit()
+
+
+        
+
     def click_label(self,smoothing=5):
         if smoothing>1:
             working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
@@ -214,7 +223,12 @@ class Model:
 
         def plot_at(x):
             global current_label
-            plt.subplot(121)
+
+            plt.subplot(131)
+            plt.cla()
+            plt.imshow(np.tile(working_profile,(512,1)).T,interpolation='none',aspect='auto')
+            
+            plt.subplot(132)
             plt.cla()
             plt.plot(z,working_profile)
             plt.plot(z[x],working_profile[x],'ks')
@@ -225,7 +239,7 @@ class Model:
                 label_z = z[label_dict[label]]
                 plt.text(label_z,working_profile[label_z],label,ha='center',va='bottom')
 
-            plt.subplot(122)
+            plt.subplot(133)
             plt.cla()
             plt.plot(z,working_profile)
             plt.plot(z[x],working_profile[x],'ks')
@@ -268,6 +282,7 @@ class Model:
                 label_dict = {}
             elif event.key=='enter':
                 label_dict[current_label] = current_x
+                print label_dict
                 current_label = ''
             plot_at(current_x)
             
@@ -309,6 +324,10 @@ class Model:
 def test():
     h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
     m = Model(h5,True)
+
+    m.label_aline()
+    sys.exit()
+    
     m.clear_labels()
     m.click_crop()
     m.click_label()
