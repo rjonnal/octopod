@@ -1,0 +1,12 @@
+#!/home/rjonnal/miniconda2/bin/python
+
+from octopod.VisualizationTools import ProjectionMaker
+import sys
+
+fn = sys.argv[1]
+if len(sys.argv)>2:
+    vidx = int(sys.argv[2])
+else:
+    vidx = 0
+pm = ProjectionMaker(fn,vidx=vidx)
+pm.project()
