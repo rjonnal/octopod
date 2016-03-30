@@ -14,3 +14,4 @@ from DispersionOptimizer import *
 from Model import *
 import utils
 from movie import *
+from VisualizationTools import *
