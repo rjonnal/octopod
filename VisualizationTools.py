@@ -1,10 +1,24 @@
+import matplotlib
+matplotlib.use('Qt4Agg')
+#matplotlib.interactive(True)
+
 from octopod.DataStore import H5
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
 import octopod_config as ocfg
 import logging,sys
+from mayavi import mlab
 
+
+class Viewer3D:
+
+    def __init__(self,h5,vidx=0):
+        self.logger = logging.getLogger(__name__)
+        if type(h5)==str:
+            h5 = H5(h5)
+        self.avol = np.abs(h5.get('/processed_data'))[vidx,:,:,:]
+        mlab.pipeline.volume(mlab.pipeline.scalar_field(self.avol))
 
 class ProjectionMaker:
 
@@ -61,8 +75,8 @@ class ProjectionMaker:
 
 
 if __name__=='__main__':
-    #h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
-    #pm = ProjectionMaker(h5)
-    pm = ProjectionMaker('./oct_test_volume/oct_test_volume_2T.hdf5')
-    
+    fn = './oct_test_volume/oct_test_volume_2T.hdf5'
+    pm = ProjectionMaker(fn)
     pm.project()
+
+    v3d = Viewer3D(fn)
