@@ -1,12 +1,27 @@
 #!/home/rjonnal/miniconda2/bin/python
 
-from octopod.VisualizationTools import ProjectionMaker
+from octopod.VisualizationTools import ProjectionMaker,Viewer3D
 import sys
+from optparse import OptionParser
 
-fn = sys.argv[1]
-if len(sys.argv)>2:
-    vidx = int(sys.argv[2])
-else:
-    vidx = 0
-pm = ProjectionMaker(fn,vidx=vidx)
-pm.project()
+parser = OptionParser()
+
+parser.add_option("-m","--mode",dest="mode",type="string",default="enface",help="volume: show 3D raycasting projection of volume; enface: show selectable en face projection of volume")
+parser.add_option("-v","--vidx",dest="vidx",type="int",default=0,help="index of the volume to show")
+parser.add_option("-d","--depth",dest="depth",type="int",default=256,help="thickness of the volume to show")
+
+(options, args) = parser.parse_args()
+print options
+mode = options.mode
+vidx = options.vidx
+depth = options.depth
+fn = sys.argv[-1]
+
+
+if mode.lower()=='volume':
+    v3d = Viewer3D(fn,vidx=vidx,depth=depth)
+elif mode.lower()=='enface':
+    pm = ProjectionMaker(fn,vidx=vidx)
+    pm.project()
+
+

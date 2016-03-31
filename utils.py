@@ -17,6 +17,21 @@ from scipy.optimize import curve_fit
 from numpy.fft import fft,ifft,fftshift
 
 
+def autotrim_volume(vol,depth):
+    rad = depth/2
+    prof = np.mean(np.mean(vol,axis=2),axis=0)
+    max_idx = np.argmax(prof)
+    z1 = max_idx - rad
+    z2 = max_idx + rad
+    if z2>len(prof):
+        z2 = len(prof)
+        z1 = z2-2*rad
+    if z1<0:
+        z1 = 0
+        z2 = 2*rad
+    return vol[:,z1:z2,:]
+
+
 def autotrim_bscan(b):
     ab = np.abs(b)
     ab[-20:,:] = 0.0
