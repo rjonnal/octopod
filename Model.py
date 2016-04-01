@@ -194,7 +194,7 @@ class Model:
 
         
 
-    def click_label(self,smoothing=5):
+    def click_label(self,smoothing=1):
         if smoothing>1:
             working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
         else:
@@ -325,11 +325,8 @@ def test():
     h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
     m = Model(h5,True)
 
-    m.label_aline()
-    sys.exit()
-    
     m.clear_labels()
-    m.click_crop()
+    #m.click_crop()
     m.click_label()
     
 if __name__=='__main__':

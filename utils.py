@@ -17,6 +17,10 @@ from scipy.optimize import curve_fit
 from numpy.fft import fft,ifft,fftshift
 
 
+
+def get_z_sampling(lambda_1,lambda_2,n=1.38):
+    return 1.0/((2*n)/lambda_1 - (2*n)/lambda_2)
+
 def autotrim_volume(vol,depth):
     rad = depth/2
     prof = np.mean(np.mean(vol,axis=2),axis=0)
