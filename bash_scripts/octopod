@@ -1,12 +1,23 @@
 #!/home/rjonnal/miniconda2/bin/python
 
+from octopod import Model
 from octopod.VisualizationTools import ProjectionMaker,Viewer3D
 import sys
 from optparse import OptionParser
 
 parser = OptionParser()
 
-parser.add_option("-m","--mode",dest="mode",type="string",default="enface",help="volume: show 3D raycasting projection of volume; enface: show selectable en face projection of volume")
+
+mode_options = {}
+mode_options['volume'] = 'show 3D raycasting projection of volume'
+mode_options['enface'] = 'show selectable en face projection of volume'
+mode_options['label'] = 'label axial scattering model'
+
+mode_string = ''
+for key in mode_options.keys():
+    mode_string = mode_string + '%s: %s; '%(key,mode_options[key])
+
+parser.add_option("-m","--mode",dest="mode",type="string",default="enface",help=mode_string)
 parser.add_option("-v","--vidx",dest="vidx",type="int",default=0,help="index of the volume to show")
 parser.add_option("-d","--depth",dest="depth",type="int",default=256,help="thickness of the volume to show")
 
@@ -23,5 +34,8 @@ if mode.lower()=='volume':
 elif mode.lower()=='enface':
     pm = ProjectionMaker(fn,vidx=vidx)
     pm.project()
-
+elif mode.lower()=='label':
+    m = Model(fn,True)
+    m.clear_labels()
+    m.click_label()
 

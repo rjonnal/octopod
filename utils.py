@@ -112,7 +112,9 @@ def translation(im0in, im1in, xlims=None, ylims=None, debug=False):
 
 def translation1(vec0in, vec1in, xlims=None, ylims=None, debug=False):
     """Return translation vector to register two vectors
-    of equal size. Returns a 3-tuple (translation_x,translation_y,correlation)."""
+    of equal size. Returns a 2-tuple (translation, goodness).
+    Translation is the amount to shift vec1in to align with
+    vec0in."""
 
     # if either vector is blank, return 0, 0, 0.0 and stop
     if np.max(vec0in)==np.min(vec0in) or np.max(vec1in)==np.min(vec1in):
@@ -125,55 +127,35 @@ def translation1(vec0in, vec1in, xlims=None, ylims=None, debug=False):
     if np.array_equal(vec0,vec1):
         return (0.0,0.0,1.0)
 
-    shape = vec0.shape
+    shape = len(vec0)
     
-    f0 = np.fft.fft(vec0)
-    f1 = np.fft.fft(vec1)
+    f0 = np.fft.fft(vec0,axis=0)
+    f1 = np.fft.fft(vec1,axis=0)
 
     # original line:
-    #ir = abs(np.fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1))))
+    # ir = abs(np.fft.ifft2((f0 * f1.conjugate()) / (abs(f0) * abs(f1))))
 
-    # break it down for checking:
     f1c = f1.conjugate()
-    num = f0 * np.conj(f1)
+    num = f0*f1c
     denom = abs(f0) * abs(f1)
-
-    # to handle some stupid corner cases, esp. where test vectors are used:
-    # put 1's into the denominator where both numerator and denominator are 0
     denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
     frac = num/denom
-    
-    ir = np.abs(np.fft.ifft(frac))
-    plt.plot(f0)
-    plt.show()
-    sys.exit()
+    ir = np.abs(np.fft.ifft(frac,axis=0))
 
     goodness = np.max(ir)
-    ty, tx = np.unravel_index(np.argmax(ir), shape)
+    tx = np.argmax(ir)
     if debug:
-        plt.subplot(3,2,1)
+        plt.subplot(1,2,1)
         plt.cla()
-        plt.imshow(im0,interpolation='none',aspect='auto')
-        plt.subplot(3,2,2)
+        plt.plot(vec0,'k-')
+        plt.plot(vec1,'r--')
+        plt.subplot(1,2,2)
         plt.cla()
-        plt.imshow(im1,interpolation='none',aspect='auto')
-        plt.subplot(3,2,3)
-        plt.cla()
-        plt.imshow(np.abs(f0),interpolation='none',aspect='auto')
-        plt.subplot(3,2,4)
-        plt.cla()
-        plt.imshow(np.abs(f1),interpolation='none',aspect='auto')
-        plt.subplot(3,2,5)
-        plt.cla()
-        plt.imshow(ir,interpolation='none',aspect='auto')
-        plt.autoscale(False)
-        plt.plot(tx,ty,'ws')
-        plt.pause(.0001)
-    if ty > shape[0] // 2:
-        ty -= shape[0]
-    if tx > shape[1] // 2:
-        tx -= shape[1]
-    return (tx, ty, goodness)
+        plt.plot(ir)
+        plt.pause(.1)
+    if tx > shape // 2:
+        tx -= shape
+    return (tx, goodness)
 
 def find_peaks(prof,intensity_threshold=-np.inf,gradient_threshold=-np.inf):
     left = prof[:-2]

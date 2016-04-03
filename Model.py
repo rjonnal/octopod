@@ -184,11 +184,44 @@ class Model:
     def clear_labels(self):
         self.h5.delete('model/labels')
 
-
-    def label_aline(self,aline=None):
+    def align_volumes(self):
+        nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
+        offset_matrix = self.h5.make('model/z_offsets',(nvol,nslow,nfast),dtype='i2')
+        goodness_matrix = self.h5.make('model/z_offset_goodness',(nvol,nslow,nfast),dtype='f8')
+        for ivol in range(nvol):
+            offset,goodness = self.align_volume(vidx=ivol)
+            offset_matrix[ivol,:,:] = offset
+            goodness_matrix[ivol,:,:] = goodness
+        
+    def align_volume(self,vidx=0,rad=5):
+        avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
+        avol = np.swapaxes(avol,0,1)
+        ndepth,nslow,nfast = avol.shape
+        FF,SS = np.meshgrid(np.arange(nfast),np.arange(nslow))
+        offset_submatrix = np.zeros((nslow,nfast))
+        goodness_submatrix = np.zeros((nslow,nfast))
+        for islow in range(nslow):
+            for ifast in range(nfast):
+                ff = FF - ifast
+                ss = SS - islow
+                d = np.sqrt(ff**2 + ss**2)
+                d[np.where(d>rad)]=0
+                d[np.where(d)]=1
+                d = d/np.sum(d)
+                fvol = avol*d
+                test = np.mean(np.mean(fvol,axis=2),axis=1)
+                offset,goodness = translation1(self.profile,test,debug=True)
+                offset_submatrix[islow,ifast] = offset
+                goodness_submatrix[islow,ifast] = goodness
+        return offset_submatrix,goodness_submatrix
+                
+    def label_aline(self,aline):
+        
         a = np.random.random((16,1))+10
         b = np.random.random((16,1))+10
-        translation1(a,b)
+        a[5] = 100.0
+        b[6] = 100.0
+        print translation1(a,b,debug=True)
         sys.exit()
 
 
@@ -325,9 +358,10 @@ def test():
     h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
     m = Model(h5,True)
 
-    m.clear_labels()
+    #m.clear_labels()
     #m.click_crop()
-    m.click_label()
+    #m.click_label()
+    m.align_volumes()
     
 if __name__=='__main__':
     test()
