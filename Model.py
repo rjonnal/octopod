@@ -184,14 +184,72 @@ class Model:
     def clear_labels(self):
         self.h5.delete('model/labels')
 
-    def align_volumes(self):
+
+    def get_volume_labels(self,z_tolerance=2):
+        nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
+        offset_matrix = self.h5.get('model/z_offsets')
+        goodness_matrix = self.h5.get('model/z_offset_goodness')
+
+        label_keys = self.h5.get('model/labels').keys()
+        labels = {}
+        volume_labels = {}
+        for key in label_keys:
+            labels[key] = self.h5.get('model/labels')[key].value
+            volume_labels[key] = np.zeros((nvol,nslow,nfast))
+            
+        for ivol in range(nvol):
+            avol = np.abs(self.h5.get('processed_data')[ivol,:,:,:])
+            for islow in range(nslow):
+                for ifast in range(nfast):
+                    test = avol[islow,:,ifast]
+                    offset = offset_matrix[ivol,islow,ifast]
+                    goodness = goodness_matrix[ivol,islow,ifast]
+                    for key in label_keys:
+                        model_z_index = labels[key]
+                        temp = np.zeros(test.shape)
+                        temp[...] = test[...]
+                        temp[:(model_z_index-offset-z_tolerance)] = 0.0
+                        temp[(model_z_index-offset+z_tolerance)+1:] = 0.0
+                        volume_labels[key][ivol,islow,ifast] = np.argmax(temp)
+
+        for key in label_keys:
+            location = 'model/volume_labels/%s'%key
+            self.h5.put(location,volume_labels[key])
+            plt.figure()
+            plt.imshow(volume_labels[key][0,:,:],interpolation='none',aspect='auto')
+            plt.title(key)
+            plt.colorbar()
+
+        plt.figure()
+        plt.imshow(offset_matrix[0,:,:],interpolation='none',aspect='auto')
+        plt.title('offset')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(goodness_matrix[0,:,:],interpolation='none',aspect='auto')
+        plt.title('goodness')
+        plt.colorbar()
+        plt.show()
+        
+                
+    def write_axial_alignment(self):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
         offset_matrix = self.h5.make('model/z_offsets',(nvol,nslow,nfast),dtype='i2')
         goodness_matrix = self.h5.make('model/z_offset_goodness',(nvol,nslow,nfast),dtype='f8')
+        om,gm = self.align_volumes()
+        offset_matrix[...] = om[...]
+        goodness_matrix[...] = gm[...]
+
+    def align_volumes(self):
+        nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
+        offset_matrix = np.zeros((nvol,nslow,nfast))
+        goodness_matrix = np.zeros((nvol,nslow,nfast))
+        
         for ivol in range(nvol):
             offset,goodness = self.align_volume(vidx=ivol)
             offset_matrix[ivol,:,:] = offset
             goodness_matrix[ivol,:,:] = goodness
+
+        return offset_matrix,goodness_matrix
         
     def align_volume(self,vidx=0,rad=5):
         avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
@@ -200,8 +258,17 @@ class Model:
         FF,SS = np.meshgrid(np.arange(nfast),np.arange(nslow))
         offset_submatrix = np.zeros((nslow,nfast))
         goodness_submatrix = np.zeros((nslow,nfast))
+        profile = self.profile
+        if len(profile)>ndepth:
+            profile = profile[:ndepth]
+        if ndepth>len(profile):
+            avol = avol[:len(profile),:,:]
+            ndepth,nslow,nfast = avol.shape
+        
         for islow in range(nslow):
+            self.logger.info('B-scan %d in volume %d.'%(islow,vidx))
             for ifast in range(nfast):
+                self.logger.info('A-scan %d.'%ifast)
                 ff = FF - ifast
                 ss = SS - islow
                 d = np.sqrt(ff**2 + ss**2)
@@ -210,22 +277,11 @@ class Model:
                 d = d/np.sum(d)
                 fvol = avol*d
                 test = np.mean(np.mean(fvol,axis=2),axis=1)
-                offset,goodness = translation1(self.profile,test,debug=True)
+                offset,goodness = translation1(profile,test,debug=False)
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
         return offset_submatrix,goodness_submatrix
                 
-    def label_aline(self,aline):
-        
-        a = np.random.random((16,1))+10
-        b = np.random.random((16,1))+10
-        a[5] = 100.0
-        b[6] = 100.0
-        print translation1(a,b,debug=True)
-        sys.exit()
-
-
-        
 
     def click_label(self,smoothing=1):
         if smoothing>1:
@@ -361,7 +417,8 @@ def test():
     #m.clear_labels()
     #m.click_crop()
     #m.click_label()
-    m.align_volumes()
+    #m.write_axial_alignment()
+    m.get_volume_labels()
     
 if __name__=='__main__':
     test()
