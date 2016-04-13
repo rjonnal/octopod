@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
-from utils import translation,translation1,autotrim_bscan,find_peaks,shear
+from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d
 from octopod.Misc import H5
 import logging
 import octopod_config as ocfg
@@ -254,32 +254,32 @@ class Model:
     def align_volume(self,vidx=0,rad=5):
         avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
         avol = np.swapaxes(avol,0,1)
+
+        if rad:
+            avol = lateral_smooth_3d(avol,rad)
+        
         ndepth,nslow,nfast = avol.shape
-        FF,SS = np.meshgrid(np.arange(nfast),np.arange(nslow))
         offset_submatrix = np.zeros((nslow,nfast))
         goodness_submatrix = np.zeros((nslow,nfast))
         profile = self.profile
+        
         if len(profile)>ndepth:
             profile = profile[:ndepth]
         if ndepth>len(profile):
             avol = avol[:len(profile),:,:]
             ndepth,nslow,nfast = avol.shape
-        
+
+        clock = Clock()
+            
         for islow in range(nslow):
             self.logger.info('B-scan %d in volume %d.'%(islow,vidx))
             for ifast in range(nfast):
                 self.logger.info('A-scan %d.'%ifast)
-                ff = FF - ifast
-                ss = SS - islow
-                d = np.sqrt(ff**2 + ss**2)
-                d[np.where(d>rad)]=0
-                d[np.where(d)]=1
-                d = d/np.sum(d)
-                fvol = avol*d
-                test = np.mean(np.mean(fvol,axis=2),axis=1)
+                test = avol[:,islow,ifast]
                 offset,goodness = translation1(profile,test,debug=False)
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
+                
         return offset_submatrix,goodness_submatrix
                 
 

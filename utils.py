@@ -15,7 +15,40 @@ from scipy import signal
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import curve_fit
 from numpy.fft import fft,ifft,fftshift
+from time import time
 
+class Clock:
+
+    def tick(self):
+        self.t0 = time()
+
+    def tock(self,label=''):
+        print '%s: %0.5f'%(label,time()-self.t0)
+
+
+def lateral_smooth_3d(volume,kernel_radius):
+    
+    fvol1 = np.fft.fft2(volume,axes=(1,2))
+    fvol2 = np.zeros(fvol1.shape,dtype='complex64')
+    for k in range(fvol2.shape[0]):
+        fvol2[k,:,:] = np.fft.fft2(volume[k,:,:])
+
+    fvol = fvol2
+
+    n = np.ceil(kernel_radius*2)
+    XX,YY = np.meshgrid(np.arange(fvol.shape[2]),np.arange(fvol.shape[1]))
+    XX = XX - kernel_radius
+    YY = YY - kernel_radius
+    d = np.sqrt(XX**2+YY**2)
+    kernel = np.zeros(d.shape)
+    kernel[np.where(d<=kernel_radius)] = 1.0
+    kernel = kernel/np.sum(kernel)
+    fkernel = np.fft.fft2(kernel)
+
+    fout = fvol*fkernel
+    out = np.abs(np.fft.ifft2(fout))
+
+    return out
 
 
 def get_z_sampling(lambda_1,lambda_2,n=1.38):
