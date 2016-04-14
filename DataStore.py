@@ -23,8 +23,7 @@ class DataStore:
     def __init__(self,filename):
         self.filename = filename
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Creating %s object.'%__name__)
-
+        self.logger.info('Creating %s object from %s.'%(self.__class__,filename))
 
     def close(self):
         '''Close interface to this data store.'''

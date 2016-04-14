@@ -46,7 +46,7 @@ class Reporter:
         for key in keys:
             label_dict[key] = self.h5.get('model/labels')[key].value
 
-        
+        plt.figure(figsize=(6,5))
         plt.plot(z,working_profile)
         valid = np.where(working_profile)[0]
         plt.xlim((z[valid[0]],z[valid[-1]]))
@@ -62,6 +62,7 @@ class Reporter:
         
         outfn = os.path.join(self.report_directory,tag.replace(' ','_')+'.png')
         plt.savefig(outfn)
+        plt.close()
 
 
     def dispersion_report(self,N=None):
@@ -109,8 +110,9 @@ class Reporter:
 
         outfn = os.path.join(self.report_directory,'dispersion_optimization.png')
         plt.savefig(outfn)
+        plt.close()
 
-    def processed_report(self):
+    def processed_report(self,show=True):
         proc = np.abs(self.h5.get('processed_data')[:])
         n_volumes,n_slow,n_depth,n_fast = proc.shape
         for i_volume in range(n_volumes):
@@ -119,17 +121,20 @@ class Reporter:
 
             vol = proc[i_volume,:,:,:]
 
-            cmin = np.median(vol)-np.std(vol)
-            cmax = np.max(vol)*.6
+            test_vol = vol[5:-5:5,:,5:-5:5]
+            cmin = np.median(test_vol)
+            cmax = np.percentile(test_vol,99.95) # saturate 0.05% of pixels
 
-            plt.figure(figsize=(n_fast/200.0,n_depth/200.0))
+            dpi = 100.0
+            plt.figure(figsize=(n_fast/dpi,n_depth/dpi))
             
             for i_slow in range(n_slow):
                 plt.cla()
                 plt.axes([0,0,1,1])
                 plt.imshow(vol[i_slow,:,:],cmap='gray',clim=(cmin,cmax),interpolation='none',aspect='auto')
-                plt.savefig(os.path.join(outdir,'%04d.png'%i_slow))
-                plt.pause(.1)
+                plt.savefig(os.path.join(outdir,'%04d.png'%i_slow),dpi=dpi)
+                if show:
+                    plt.pause(.0000001)
 
             plt.close()
         

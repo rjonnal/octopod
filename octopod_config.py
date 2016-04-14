@@ -8,11 +8,12 @@ data_root = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data'
 data_paths = {}
 #data_paths['2g_aooct'] = 'D:/rjonnal/Dropbox/Share/2g_aooct_data/Data/'
 data_paths['2g_aooct'] = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data'
-data_paths['hroct'] = '/home/rjonnal/data/Dropbox/Share/hroct_data/Data'
+#data_paths['hroct'] = '/home/rjonnal/data/Dropbox/Share/hroct_data/Data'
 
 db_file = '/home/rjonnal/db/octopod.db'
 
 raw_data_extension = 'unp'
+h5_extension = 'hdf5'
 raw_bytes_per_pixel = 2
 
 source_spectra = {}
@@ -47,3 +48,6 @@ dispersion_2_max = 10.0
 dispersion_2_min = -10.0
 dispersion_2_multiplier = 1e-11
 dispersion_2_step_size = 1e-2
+
+x_mv_per_deg = 3168.
+y_mv_per_deg = 2112.
