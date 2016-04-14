@@ -176,7 +176,7 @@ class Model:
         out = {}
         try:
             for key in self.h5.get('model/labels').keys():
-                out[key] = self.h5.get('model/labels')[key]
+                out[key] = self.h5.get('model/labels')[key].value
         except Exception as e:
             print e
         return out
@@ -268,8 +268,6 @@ class Model:
         if ndepth>len(profile):
             avol = avol[:len(profile),:,:]
             ndepth,nslow,nfast = avol.shape
-
-        clock = Clock()
             
         for islow in range(nslow):
             self.logger.info('B-scan %d in volume %d.'%(islow,vidx))
@@ -282,7 +280,32 @@ class Model:
                 
         return offset_submatrix,goodness_submatrix
                 
+    def find_matching_labels(self,goodness_threshold=0.9,rad=3):
+        modeldb = H5(ocfg.model_database)
+        guess_dict = {}
+        for key in modeldb.h5.keys():
+            print key
+            test = modeldb.get(key)['profile'][:]
+            if len(test)>len(self.profile):
+                test_profile = test[:len(self.profile)]
+            elif len(test)<len(self.profile):
+                test_profile = np.zeros(len(self.profile))
+                test_profile[:len(test)] = test
+            else:
+                test_profile = test
+            offset,goodness = translation1(test_profile,self.profile,debug=False)
+            if goodness>goodness_threshold:
+                test_labels = modeldb.get(key)['labels'].keys()
+                for test_label in test_labels:
+                    search_position = modeldb.get(key)['labels'][test_label].value - offset
+                    temp = np.zeros(self.profile.shape)
+                    temp[search_position-rad:search_position+rad+1] = self.profile[search_position-rad:search_position+rad+1]
+                    guess_dict[test_label] = np.argmax(temp)
+            break
+        
+        return guess_dict
 
+    
     def click_label(self,smoothing=1):
         if smoothing>1:
             working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
@@ -294,6 +317,9 @@ class Model:
 
         peaks = list(find_peaks(working_profile,gradient_threshold=gthresh))+list(find_peaks(-working_profile,gradient_threshold=gthresh))
         peaks = sorted(peaks)
+        peaks = np.array(peaks)
+
+        peaks = np.sort(find_peaks(working_profile,gradient_threshold=gthresh))
         
         idx = 0
         z = np.arange(len(working_profile))
@@ -306,7 +332,14 @@ class Model:
                 plt.rcParams[key] = ''
         
         global current_x,current_label,label_dict
+
+        # try to get the label dictionary from the current dataset
+        # if none exists, mine the model database for a match
+        
         label_dict = self.get_label_dict()
+        if len(label_dict)==0:
+            label_dict = self.find_matching_labels()
+            
         current_x = 0
         current_label = ''
 
@@ -354,11 +387,27 @@ class Model:
             if event.key=='right':
                 current_x = (current_x + 1)%len(working_profile)
             elif event.key=='ctrl+right':
-                current_x = (current_x + 20)%len(working_profile)
+                try:
+                    current_x = np.min(peaks[np.where(peaks>current_x)[0]])
+                except Exception as e:
+                    current_x = len(working_profile)-1
             elif event.key=='left':
                 current_x = (current_x - 1)%len(working_profile)
             elif event.key=='ctrl+left':
-                current_x = (current_x - 20)%len(working_profile)
+                try:
+                    current_x = np.max(peaks[np.where(peaks<current_x)[0]])
+                except Exception as e:
+                    current_x = 0
+            elif event.key=='shift+ctrl+right':
+                try:
+                    current_x = peaks[np.where(peaks>current_x)[0]][5]
+                except Exception as e:
+                    current_x = len(working_profile)-1
+            elif event.key=='shift+ctrl+left':
+                try:
+                    current_x = peaks[np.where(peaks<current_x)[0]][-5]
+                except Exception as e:
+                    current_x = 0
             elif event.key=='shift':
                 pass
             elif event.key=='/':
@@ -367,8 +416,12 @@ class Model:
                 current_label = current_label + event.key.upper()
             elif event.key=='backspace':
                 current_label = current_label[:-1]
-            elif current_label=='delete':
+            elif event.key=='ctrl+delete':
                 label_dict = {}
+            elif event.key=='delete':
+                for key in label_dict.keys():
+                    if label_dict[key]==current_x:
+                        label_dict.pop(key)
             elif event.key=='enter':
                 label_dict[current_label] = current_x
                 print label_dict
@@ -398,7 +451,7 @@ class Model:
         nt = self.h5.get('eccentricity/nasal_temporal').value
         
         radial_distance = np.sqrt(si**2+nt**2)
-
+        
         mdb.put('%s/superior_inferior'%did_key,si)
         mdb.put('%s/nasal_temporal'%did_key,nt)
         mdb.put('%s/radial_distance'%did_key,radial_distance)
@@ -407,15 +460,16 @@ class Model:
         mdb.require_group('%s/labels'%did_key)
         for key in label_dict.keys():
             mdb.put('%s/labels/%s'%(did_key,key),label_dict[key])
+
+        mdb.close()
         
 
 
 def test():
     h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
     m = Model(h5,True)
-
+    #m.make_model()
     #m.clear_labels()
-    #m.click_crop()
     #m.click_label()
     #m.write_axial_alignment()
     m.get_volume_labels()

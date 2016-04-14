@@ -151,14 +151,14 @@ def translation1(vec0in, vec1in, xlims=None, ylims=None, debug=False):
 
     # if either vector is blank, return 0, 0, 0.0 and stop
     if np.max(vec0in)==np.min(vec0in) or np.max(vec1in)==np.min(vec1in):
-        return (0.0,0.0,0.0)
+        return (0.0,0.0)
 
     vec0 = (vec0in-np.mean(vec0in))/np.std(vec0in)
     vec1 = (vec1in-np.mean(vec1in))/np.std(vec1in)
     
     # if the vectors are identical, return 0, 0, 1.0 and stop
     if np.array_equal(vec0,vec1):
-        return (0.0,0.0,1.0)
+        return (0.0,1.0)
 
     shape = len(vec0)
     
