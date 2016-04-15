@@ -143,12 +143,21 @@ def translation(im0in, im1in, xlims=None, ylims=None, debug=False):
         tx -= shape[1]
     return (tx, ty, goodness)
 
-def translation1(vec0in, vec1in, xlims=None, ylims=None, debug=False):
+def translation1(vec0in, vec1in, xlims=None, equalize=False, debug=False):
     """Return translation vector to register two vectors
     of equal size. Returns a 2-tuple (translation, goodness).
     Translation is the amount to shift vec1in to align with
     vec0in."""
-
+    if equalize:
+        if len(vec0in)>len(vec1in):
+            newvec1 = np.zeros(vec0in.shape)
+            newvec1[:len(vec1in)] = vec1in
+            vec1in = newvec1
+        elif len(vec1in)>len(vec0in):
+            newvec0 = np.zeros(vec1in.shape)
+            newvec0[:len(vec0in)] = vec0in
+            vec0in = newvec0
+    
     # if either vector is blank, return 0, 0, 0.0 and stop
     if np.max(vec0in)==np.min(vec0in) or np.max(vec1in)==np.min(vec1in):
         return (0.0,0.0)
@@ -174,6 +183,9 @@ def translation1(vec0in, vec1in, xlims=None, ylims=None, debug=False):
     denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
     frac = num/denom
     ir = np.abs(np.fft.ifft(frac,axis=0))
+    
+    if xlims is not None:
+        ir[xlims:-xlims] = 0.0
 
     goodness = np.max(ir)
     tx = np.argmax(ir)

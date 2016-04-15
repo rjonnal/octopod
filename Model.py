@@ -280,11 +280,21 @@ class Model:
                 
         return offset_submatrix,goodness_submatrix
                 
-    def find_matching_labels(self,goodness_threshold=0.9,rad=3):
+                
+    def cleanup_modeldb(self):
         modeldb = H5(ocfg.model_database)
-        guess_dict = {}
         for key in modeldb.h5.keys():
-            print key
+            if len(modeldb.h5[key]['labels'].keys())==0:
+                del modeldb.h5[key]
+        modeldb.close()
+        
+    def find_matching_labels(self,goodness_threshold=0.6,rad=3):
+        modeldb = H5(ocfg.model_database)
+        print modeldb.h5.keys()
+        guess_dicts = [{}]
+        goodnesses = [-np.inf]
+        for key in modeldb.h5.keys():
+            guess_dict = {}
             test = modeldb.get(key)['profile'][:]
             if len(test)>len(self.profile):
                 test_profile = test[:len(self.profile)]
@@ -294,16 +304,19 @@ class Model:
             else:
                 test_profile = test
             offset,goodness = translation1(test_profile,self.profile,debug=False)
+            self.logger.info('Comparing with model labels from %s: goodness %0.3f.'%(key,goodness))
             if goodness>goodness_threshold:
                 test_labels = modeldb.get(key)['labels'].keys()
-                for test_label in test_labels:
-                    search_position = modeldb.get(key)['labels'][test_label].value - offset
-                    temp = np.zeros(self.profile.shape)
-                    temp[search_position-rad:search_position+rad+1] = self.profile[search_position-rad:search_position+rad+1]
-                    guess_dict[test_label] = np.argmax(temp)
-            break
+                if len(test_labels)>0:
+                    for test_label in test_labels:
+                        search_position = modeldb.get(key)['labels'][test_label].value - offset
+                        temp = np.zeros(self.profile.shape)
+                        temp[search_position-rad:search_position+rad+1] = self.profile[search_position-rad:search_position+rad+1]
+                        guess_dict[test_label] = np.argmax(temp)
+                    guess_dicts.append(guess_dict)
+                    goodnesses.append(goodness)
         
-        return guess_dict
+        return guess_dicts[np.argmax(goodnesses)]
 
     
     def click_label(self,smoothing=1):
@@ -315,9 +328,8 @@ class Model:
         # find peaks and troughs:
         gthresh = 1.0/smoothing
 
-        peaks = list(find_peaks(working_profile,gradient_threshold=gthresh))+list(find_peaks(-working_profile,gradient_threshold=gthresh))
-        peaks = sorted(peaks)
-        peaks = np.array(peaks)
+        nslow = self.h5.h5['processed_data'].shape[1]
+        
 
         peaks = np.sort(find_peaks(working_profile,gradient_threshold=gthresh))
         
@@ -326,7 +338,7 @@ class Model:
         done = False or not len(peaks)
 
 
-        fig = plt.figure(figsize=(20,6))
+        fig = plt.figure(figsize=(22,16))
         for key in plt.rcParams.keys():
             if key[:6]=='keymap':
                 plt.rcParams[key] = ''
@@ -343,14 +355,48 @@ class Model:
         current_x = 0
         current_label = ''
 
-        def plot_at(x):
-            global current_label
+        l1 = .05
+        l2 = .55
+        fw = .9
+        hw = .4
+        b1 = .55
+        b2 = .05
+        fh = .9
+        hh = .4
+        
+        global bscanindex 
+        bscanindex = 0
 
-            plt.subplot(131)
-            plt.cla()
-            plt.imshow(np.tile(working_profile,(512,1)).T,interpolation='none',aspect='auto')
+        def plot_at(x):
+            global current_label,bscanindex
             
-            plt.subplot(132)
+            if x in label_dict.values():
+                existing_label = [key for key, value in label_dict.items() if value == x][0]
+            else:
+                existing_label = ''
+            
+            plt.axes([l1,b2,hw,hh])
+            plt.cla()
+            bscan = np.abs(self.h5.h5['processed_data'][0,bscanindex,:,:])
+            #bscan = shear(bscan,1)
+            try:
+                test = np.mean(bscan[:,-20:],axis=1)
+            except:
+                test = np.mean(bscan,axis=1)
+            offset,goodness = translation1(test,working_profile,xlims=10,equalize=True)
+            
+            cmin = np.median(bscan)
+            cmax = np.percentile(bscan,99.95) # saturate 0.05% of pixels
+            plt.imshow(bscan,interpolation='none',clim=(cmin,cmax),cmap='gray')
+            for label in label_dict.keys():
+                label_z = z[label_dict[label]]
+                th = plt.text(bscan.shape[1],label_z-offset,label,ha='left',va='center',fontsize=8)
+            try:
+                plt.ylim((np.max(label_dict.values())+10,np.min(label_dict.values())-10))
+            except:
+                pass
+                
+            plt.axes([l1,b1,fw,hh])
             plt.cla()
             plt.plot(z,working_profile)
             plt.plot(z[x],working_profile[x],'ks')
@@ -359,9 +405,9 @@ class Model:
             plt.autoscale(False)
             for label in label_dict.keys():
                 label_z = z[label_dict[label]]
-                plt.text(label_z,working_profile[label_z],label,ha='center',va='bottom')
-
-            plt.subplot(133)
+                th = plt.text(label_z,working_profile[label_z],label,ha='center',va='bottom')
+                
+            plt.axes([l2,b2,hw,hh])
             plt.cla()
             plt.plot(z,working_profile)
             plt.plot(z[x],working_profile[x],'ks')
@@ -369,7 +415,8 @@ class Model:
             z1 = max(0,x-10)
             z2 = min(len(z),x+10)
             ymin = np.min(working_profile[z1:z2])
-            ymax = np.max(working_profile[z1:z2])
+            ymax = np.max(working_profile[z1:z2])*1.25
+            plt.text(z[x],working_profile[x],existing_label,ha='center',va='bottom')
             plt.ylim((ymin,ymax))
             plt.title(current_label)
             plt.draw()
@@ -383,7 +430,8 @@ class Model:
             plot_at(current_x)
 
         def onpress(event):
-            global current_x,current_label,label_dict
+            #print event.key
+            global current_x,current_label,label_dict,bscanindex
             if event.key=='right':
                 current_x = (current_x + 1)%len(working_profile)
             elif event.key=='ctrl+right':
@@ -426,6 +474,11 @@ class Model:
                 label_dict[current_label] = current_x
                 print label_dict
                 current_label = ''
+            elif event.key=='pageup':
+                bscanindex = (bscanindex + 1)%nslow
+            elif event.key=='pagedown':
+                bscanindex = (bscanindex - 1)%nslow
+                
             plot_at(current_x)
             
 
