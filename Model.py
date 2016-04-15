@@ -272,7 +272,7 @@ class Model:
         for islow in range(nslow):
             self.logger.info('B-scan %d in volume %d.'%(islow,vidx))
             for ifast in range(nfast):
-                self.logger.info('A-scan %d.'%ifast)
+                #self.logger.info('A-scan %d.'%ifast)
                 test = avol[:,islow,ifast]
                 offset,goodness = translation1(profile,test,debug=False)
                 offset_submatrix[islow,ifast] = offset
@@ -524,8 +524,8 @@ def test():
     #m.make_model()
     #m.clear_labels()
     #m.click_label()
-    #m.write_axial_alignment()
-    m.get_volume_labels()
+    m.write_axial_alignment()
+    #m.get_volume_labels()
     
 if __name__=='__main__':
     test()
