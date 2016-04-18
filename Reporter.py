@@ -154,7 +154,10 @@ class Reporter:
             for iv in range(nv):
                 outfn = os.path.join(outdir,'enface_projection_%s_%03d.png'%(key,iv))
                 plt.cla()
-                plt.imshow(proj_stack[iv,:,:],interpolation='none',cmap='gray')
+                im = proj_stack[iv,:,:]
+                clim = np.min(im[20:-20,20:-20]),np.max(im[20:-20,20:-20])
+                clim = np.percentile(im,[5,99])
+                plt.imshow(im,interpolation='none',cmap='gray',clim=clim)
                 plt.xticks([])
                 plt.yticks([])
                 plt.savefig(outfn,dpi=dpi)

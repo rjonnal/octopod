@@ -184,16 +184,37 @@ class Model:
 
     def clear_labels(self):
         self.h5.delete('model/labels')
+        
+    def plot_profile(self):
+        plt.plot(self.profile)
+        label_dict = self.get_label_dict()
+        for label in label_dict.keys():
+            label_z = label_dict[label]
+            th = plt.text(label_z,self.profile[label_z],label,ha='center',va='bottom')
+        plt.ylim([np.min(self.profile),np.max(self.profile)*1.1])
 
 
-    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,3,9),goodness_threshold=0.25):
+    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,5,15),goodness_threshold=0.25):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
         offset_matrix = self.h5.get('model/z_offsets')[:].astype(np.float64)
         goodness_matrix = self.h5.get('model/z_offset_goodness')[:]
 
-        offset_matrix[np.where(goodness_matrix<goodness_threshold)] = np.nan
-        offset_matrix = generic_filter(offset_matrix,np.nanmedian,medfilt_kernel,mode='nearest')
+        foffset_matrix = np.zeros(offset_matrix.shape)
+        foffset_matrix[:,:,:] = offset_matrix[:,:,:]
+        foffset_matrix[np.where(goodness_matrix<goodness_threshold)] = np.nan
+        foffset_matrix = generic_filter(foffset_matrix,np.nanmedian,medfilt_kernel,mode='nearest')
         
+        # now, filter out clear outliers; replace with global mode
+        mode = sp.stats.mode(offset_matrix.ravel())[0][0]
+        
+        mask = np.zeros(foffset_matrix.shape)
+        lower_threshold = np.mean(offset_matrix)-1.5*np.std(offset_matrix)
+        upper_threshold = np.mean(offset_matrix)+1.5*np.std(offset_matrix)
+        cond = np.logical_and(foffset_matrix>lower_threshold,foffset_matrix<upper_threshold)
+        mask[np.where(cond)] = 1
+        self.logger.info('Fraction of pixels in offset matrix deemed valid: %0.4f.'%(np.sum(mask)/np.prod(mask.shape)))
+        self.logger.info('Setting invalid pixels to offset mode: %d'%mode)
+        foffset_matrix[np.where(1-mask)] = mode
         label_keys = self.h5.get('model/labels').keys()
         labels = {}
         volume_labels = {}
@@ -206,19 +227,46 @@ class Model:
             
         for ivol in range(nvol):
             avol = np.abs(self.h5.get('processed_data')[ivol,:,:,:])
+            # plt.subplot(121)
+            # plt.imshow(offset_matrix[ivol,:,:])
+            # plt.colorbar()
+            # plt.subplot(122)
+            # plt.imshow(foffset_matrix[ivol,:,:])
+            # plt.colorbar()
+            # plt.show()
+            self.logger.info('Labeling volume %d of %d.'%(ivol+1,nvol))
             for islow in range(nslow):
+                if islow%20==0:
+                    self.logger.info('%d percent done.'%(float(islow)/float(nslow)*100))
                 for ifast in range(nfast):
                     test = avol[islow,:,ifast]
                     offset = offset_matrix[ivol,islow,ifast]
+                    foffset = foffset_matrix[ivol,islow,ifast]
                     for key in label_keys:
                         model_z_index = labels[key]
                         temp = np.zeros(test.shape)
                         temp[...] = test[...]
-                        temp[:(model_z_index-offset-z_tolerance)] = -np.inf
-                        temp[(model_z_index-offset+z_tolerance)+1:] = -np.inf
+                        z1,z2 = model_z_index-offset-z_tolerance,model_z_index-offset+z_tolerance
+                        temp[:z1] = -np.inf
+                        temp[z2+1:] = -np.inf
+                        
+                        # plt.subplot(311)
+                        # plt.cla()
+                        # self.plot_profile()
+                        # plt.subplot(312)
+                        # plt.cla()
+                        # plt.plot(test)
+                        # plt.axvspan(z1,z2,alpha=0.3)
+                        # plt.title(key)
+                        # print offset,z1,z2
+                        # plt.subplot(313)
+                        # plt.cla()
+                        # plt.plot(temp)
+                        # plt.pause(1)
                         max_idx = np.argmax(temp)
                         volume_labels[key][ivol,islow,ifast] = max_idx
                         projections[key][ivol,islow,ifast] = np.mean(test[max_idx-z_tolerance:max_idx+z_tolerance+1])
+            print
 
         for key in label_keys:
             location = 'model/volume_labels/%s'%key
