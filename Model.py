@@ -236,8 +236,8 @@ class Model:
             # plt.show()
             self.logger.info('Labeling volume %d of %d.'%(ivol+1,nvol))
             for islow in range(nslow):
-                if islow%20==0:
-                    self.logger.info('%d percent done.'%(float(islow)/float(nslow)*100))
+                if (islow+1)%20==0:
+                    self.logger.info('%d percent done.'%(float(islow+1)/float(nslow)*100))
                 for ifast in range(nfast):
                     test = avol[islow,:,ifast]
                     offset = offset_matrix[ivol,islow,ifast]
