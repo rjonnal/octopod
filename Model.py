@@ -185,9 +185,10 @@ class Model:
         self.h5.delete('model/labels')
 
 
-    def get_volume_labels(self,z_tolerance=2):
+    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,3,9)):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
         offset_matrix = self.h5.get('model/z_offsets')
+        
         goodness_matrix = self.h5.get('model/z_offset_goodness')
 
         label_keys = self.h5.get('model/labels').keys()

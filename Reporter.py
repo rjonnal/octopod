@@ -5,6 +5,7 @@ import logging
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
+from scipy.signal import medfilt
 logging.basicConfig(level=logging.DEBUG)
 
 class Reporter:
@@ -137,8 +138,19 @@ class Reporter:
                     plt.pause(.0000001)
 
             plt.close()
+            
+    def make_projections(self,vidx,show):
+        z_offsets = self.h5.get('model/z_offsets')[vidx,:,:]
+        z_offsets = medfilt(z_offsets,(3,9))
+        print self.h5.h5['model'].keys()
         
-
+        
+        
+    def projections_report(self,show=True):
+        nv,ns,nd,nf = self.h5.h5['processed_data'].shape
+        for iv in range(nv):
+            self.make_projections(iv,show)
+            
 if __name__=='__main__':
 
     h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
