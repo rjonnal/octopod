@@ -2,6 +2,7 @@ import sys,os
 import logging
 import numpy as np
 import scipy as sp
+from scipy.ndimage.filters import generic_filter
 from matplotlib import pyplot as plt
 from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d
 from octopod.Misc import H5
@@ -185,18 +186,23 @@ class Model:
         self.h5.delete('model/labels')
 
 
-    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,3,9)):
+    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,3,9),goodness_threshold=0.25):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
-        offset_matrix = self.h5.get('model/z_offsets')
-        
-        goodness_matrix = self.h5.get('model/z_offset_goodness')
+        offset_matrix = self.h5.get('model/z_offsets')[:].astype(np.float64)
+        goodness_matrix = self.h5.get('model/z_offset_goodness')[:]
 
+        offset_matrix[np.where(goodness_matrix<goodness_threshold)] = np.nan
+        offset_matrix = generic_filter(offset_matrix,np.nanmedian,medfilt_kernel,mode='nearest')
+        
         label_keys = self.h5.get('model/labels').keys()
         labels = {}
         volume_labels = {}
+        projections = {}
+        
         for key in label_keys:
             labels[key] = self.h5.get('model/labels')[key].value
             volume_labels[key] = np.zeros((nvol,nslow,nfast))
+            projections[key] = np.zeros((nvol,nslow,nfast))
             
         for ivol in range(nvol):
             avol = np.abs(self.h5.get('processed_data')[ivol,:,:,:])
@@ -204,32 +210,21 @@ class Model:
                 for ifast in range(nfast):
                     test = avol[islow,:,ifast]
                     offset = offset_matrix[ivol,islow,ifast]
-                    goodness = goodness_matrix[ivol,islow,ifast]
                     for key in label_keys:
                         model_z_index = labels[key]
                         temp = np.zeros(test.shape)
                         temp[...] = test[...]
-                        temp[:(model_z_index-offset-z_tolerance)] = 0.0
-                        temp[(model_z_index-offset+z_tolerance)+1:] = 0.0
-                        volume_labels[key][ivol,islow,ifast] = np.argmax(temp)
+                        temp[:(model_z_index-offset-z_tolerance)] = -np.inf
+                        temp[(model_z_index-offset+z_tolerance)+1:] = -np.inf
+                        max_idx = np.argmax(temp)
+                        volume_labels[key][ivol,islow,ifast] = max_idx
+                        projections[key][ivol,islow,ifast] = np.mean(test[max_idx-z_tolerance:max_idx+z_tolerance+1])
 
         for key in label_keys:
             location = 'model/volume_labels/%s'%key
+            plocation = 'projections/%s'%key
             self.h5.put(location,volume_labels[key])
-            plt.figure()
-            plt.imshow(volume_labels[key][0,:,:],interpolation='none',aspect='auto')
-            plt.title(key)
-            plt.colorbar()
-
-        plt.figure()
-        plt.imshow(offset_matrix[0,:,:],interpolation='none',aspect='auto')
-        plt.title('offset')
-        plt.colorbar()
-        plt.figure()
-        plt.imshow(goodness_matrix[0,:,:],interpolation='none',aspect='auto')
-        plt.title('goodness')
-        plt.colorbar()
-        plt.show()
+            self.h5.put(plocation,projections[key])
         
                 
     def write_axial_alignment(self):
@@ -525,8 +520,8 @@ def test():
     #m.make_model()
     #m.clear_labels()
     #m.click_label()
-    m.write_axial_alignment()
-    m.get_volume_labels()
+    #m.write_axial_alignment()
+    m.write_volume_labels()
     
 if __name__=='__main__':
     test()

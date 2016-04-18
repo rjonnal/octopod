@@ -17,6 +17,8 @@ class Series:
 
         self.reference_layers = {}
 
+        print self.reference_h5.h5.keys()
+
         for key in self.reference_labels:
             self.reference_layers[key] = self.reference_h5.get('model/volume_labels/%s'%key)[vidx,:,:]
         

@@ -6,6 +6,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import interpolate
 from scipy.signal import medfilt
+from scipy.ndimage.filters import generic_filter
 logging.basicConfig(level=logging.DEBUG)
 
 class Reporter:
@@ -139,20 +140,31 @@ class Reporter:
 
             plt.close()
             
-    def make_projections(self,vidx,show):
-        z_offsets = self.h5.get('model/z_offsets')[vidx,:,:]
-        z_offsets = medfilt(z_offsets,(3,9))
-        print self.h5.h5['model'].keys()
-        
-        
-        
-    def projections_report(self,show=True):
-        nv,ns,nd,nf = self.h5.h5['processed_data'].shape
-        for iv in range(nv):
-            self.make_projections(iv,show)
+    def projections_report(self,show=True,dpi=600.0):
+        outdir = os.path.join(self.report_directory,'enface_projections')
+        self.makedirs(outdir)
+        keys = self.h5.get('projections').keys()
+        for key in keys:
+            proj_stack = self.h5.get('projections/%s'%key)
+            nv,ns,nf = proj_stack.shape
+            nfi = nf/dpi*6
+            nsi = ns/dpi*6
+            plt.figure(figsize=(nfi,nsi))
+            plt.axes([0,0,1,1])
+            for iv in range(nv):
+                outfn = os.path.join(outdir,'enface_projection_%s_%03d.png'%(key,iv))
+                plt.cla()
+                plt.imshow(proj_stack[iv,:,:],interpolation='none',cmap='gray')
+                plt.xticks([])
+                plt.yticks([])
+                plt.savefig(outfn,dpi=dpi)
+                if show:
+                    plt.pause(1)
+            plt.close()
+                
             
 if __name__=='__main__':
 
     h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
     r = Reporter(h5,'./oct_test_volume/oct_test_volume_2T_report')
-    r.processed_report()
+    r.projections_report()
