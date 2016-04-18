@@ -523,8 +523,8 @@ def test():
     m = Model(h5,True)
     #m.make_model()
     #m.clear_labels()
-    #m.click_label()
-    m.write_axial_alignment()
+    m.click_label()
+    #m.write_axial_alignment()
     #m.get_volume_labels()
     
 if __name__=='__main__':
