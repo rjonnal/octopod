@@ -285,12 +285,13 @@ class Model:
         
                 
     def write_axial_alignment(self):
-        self.logging.info('Writing axial offsets, goodness, and spline fit to data store.')
+        self.logger.info('write_axial_alignment: Starting.')
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
         offset_matrix = self.h5.make('model/z_offsets',(nvol,nslow,nfast),dtype='i2')
         goodness_matrix = self.h5.make('model/z_offset_goodness',(nvol,nslow,nfast),dtype='f8')
         fit_matrix = self.h5.make('model/z_offset_fit',(nvol,nslow,nfast),dtype='f8')
         om,gm,fm = self.align_volumes()
+        self.logger.info('write_axial_alignment: Writing axial offsets, goodness, and spline fit to data store.')
         offset_matrix[...] = om[...]
         goodness_matrix[...] = gm[...]
         fit_matrix[...] = fm[...]
