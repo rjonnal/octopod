@@ -302,8 +302,11 @@ class Model:
         z = []
         w = []
         for islow in range(nslow):
+            done = []
             pct_done = int(round(float((islow+1)*nfast)/float(nslow*nfast)*100))
-            self.logger.info('Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
+            if pct_done%5==0 and not pct_done in done:
+                self.logger.info('align_volume: Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
+                done.append(pct_done)
             for ifast in range(nfast):
                 #self.logger.info('A-scan %d.'%ifast)
                 test = avol[:,islow,ifast]

@@ -140,30 +140,47 @@ class Reporter:
 
             plt.close()
             
-    def projections_report(self,show=True,dpi=600.0):
+    def projections_report(self,show=False,dpi=600.0):
         outdir = os.path.join(self.report_directory,'enface_projections')
         self.makedirs(outdir)
         keys = self.h5.get('projections').keys()
+        self.model_report()
         for key in keys:
             proj_stack = self.h5.get('projections/%s'%key)
+            offset_stack = self.h5.get('model/volume_labels/%s'%key)
+            
             nv,ns,nf = proj_stack.shape
-            nfi = nf/dpi*6
+            nfi = nf/dpi*6*1.25
             nsi = ns/dpi*6
-            plt.figure(figsize=(nfi,nsi))
-            plt.axes([0,0,1,1])
             for iv in range(nv):
+                plt.figure(figsize=(nfi,nsi))
+                plt.axes([0,0,.8,1])
                 outfn = os.path.join(outdir,'enface_projection_%s_%03d.png'%(key,iv))
                 plt.cla()
                 im = proj_stack[iv,:,:]
-                clim = np.min(im[20:-20,20:-20]),np.max(im[20:-20,20:-20])
-                clim = np.percentile(im,[5,99])
+                clim = np.percentile(im[20:-20,20:-20],[5,99])
                 plt.imshow(im,interpolation='none',cmap='gray',clim=clim)
+                plt.colorbar(fraction=0.046, pad=0.04)
+                plt.xticks([])
+                plt.yticks([])
+                plt.savefig(outfn,dpi=dpi)
+                plt.close()
+                plt.figure(figsize=(nfi,nsi))
+                plt.axes([0,0,.8,1])
+                if show:
+                    plt.pause(1)
+                outfn = os.path.join(outdir,'label_offset_%s_%03d.png'%(key,iv))
+                plt.cla()
+                im = offset_stack[iv,:,:]
+                clim = np.percentile(im[20:-20,20:-20],[1,99])
+                plt.imshow(im,interpolation='none')
+                plt.colorbar(fraction=0.046, pad=0.04)
                 plt.xticks([])
                 plt.yticks([])
                 plt.savefig(outfn,dpi=dpi)
                 if show:
                     plt.pause(1)
-            plt.close()
+                plt.close()
                 
             
 if __name__=='__main__':

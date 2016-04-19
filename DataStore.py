@@ -84,6 +84,13 @@ class H5(DataStore):
     def keys(self):
         return self.h5.keys()
 
+    def has(self,key):
+        out = True
+        try:
+            junk = self.h5[key]
+        except:
+            out = False
+        return out
     # While convenient, implementation of getitem greatly reduces the flexibility of
     # the DataStore object, since alternative implementations (e.g. SQl) won't have
     # dictionary behavior by default.
