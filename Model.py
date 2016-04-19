@@ -195,7 +195,7 @@ class Model:
         plt.ylim([np.min(self.profile),np.max(self.profile)*1.1])
 
 
-    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,5,15),goodness_threshold=0.25):
+    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,5,15),goodness_threshold=0.25,use_spline_fit=True):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
 
         if use_spline_fit:
@@ -310,10 +310,13 @@ class Model:
 
         return offset_matrix,goodness_matrix,fit_surface_matrix
         
-    def align_volume(self,vidx=0,rad=5,goodness_threshold=0.0):
+    def align_volume(self,vidx=0,rad=5):
+        self.logger.info('align_volume: Starting')
+        self.logger.info('align_volume: Getting volume from data store.')
         avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
         avol = np.swapaxes(avol,0,1)
 
+        self.logger.info('align_volume: Smoothing volume with smoothing kernel of size %d pixels.'%rad)
         if rad:
             avol = lateral_smooth_3d(avol,rad)
         
@@ -334,24 +337,42 @@ class Model:
         z = []
         w = []
         for islow in range(nslow):
-            self.logger.info('Aligning A-scans, %d of %d in volume %d.'%(islow*nfast,nslow*nfast,vidx))
+            pct_done = int(round(float((islow+1)*nfast)/float(nslow*nfast)*100))
+            self.logger.info('Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
             for ifast in range(nfast):
                 #self.logger.info('A-scan %d.'%ifast)
                 test = avol[:,islow,ifast]
                 offset,goodness = translation1(profile,test,debug=False)
-                if goodness>goodness_threshold:
-                    x.append(ifast)
-                    y.append(islow)
-                    z.append(offset)
-                    w.append(goodness)
-                
+                x.append(ifast)
+                y.append(islow)
+                z.append(offset)
+                w.append(goodness)
+            
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
+        
+        goodness_threshold=np.percentile(w,95)
+        self.logger.info('align_volume: Goodness 95th percentile %0.3f used as threshold.'%goodness_threshold)
+        #plt.hist(w,bins=100)
+        #plt.axvline(goodness_threshold)
+        #plt.show()
+        
+        valid = np.where(w>goodness_threshold)[0]
+        self.logger.info('align_volume: Using %d of %d points (%d percent) for spline fit.'%(len(valid),len(w),float(len(valid))/float(len(w))*100))
+        x = np.array(x)
+        y = np.array(y)
+        z = np.array(z)
+        w = np.array(w)
+        
+        x = x[valid]
+        y = y[valid]
+        z = z[valid]
+        w = w[valid]
         
         self.logger.info('Spline fitting surface to A-line axial positions.')
         tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
         self.logger.info('Evaluating spline function at A-line coordinates.')
-        fit_surface = bisplev(np.arange(nfast),np.arange(nslow),tck)
+        fit_surface = bisplev(np.arange(nslow),np.arange(nfast),tck)
 
         goodness_used = np.zeros(goodness_submatrix.shape)
         goodness_used[np.where(goodness_submatrix>goodness_threshold)] = 1.0
