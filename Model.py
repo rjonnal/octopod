@@ -198,8 +198,12 @@ class Model:
     def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,5,15),goodness_threshold=0.25):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
 
-        offset_matrix = self.h5.get('model/z_offsets')[:].astype(np.float64)
-        offset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
+        if use_spline_fit:
+            self.logger.info('write_volume_labels: using spline fit')
+            offset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
+        else:
+            offset_matrix = self.h5.get('model/z_offsets')[:].astype(np.float64)
+            self.logger.info('write_volume_labels: using offsets (no spline fit)')
 
         goodness_matrix = self.h5.get('model/z_offset_goodness')[:]
 
@@ -281,6 +285,7 @@ class Model:
         
                 
     def write_axial_alignment(self):
+        self.logging.info('Writing axial offsets, goodness, and spline fit to data store.')
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
         offset_matrix = self.h5.make('model/z_offsets',(nvol,nslow,nfast),dtype='i2')
         goodness_matrix = self.h5.make('model/z_offset_goodness',(nvol,nslow,nfast),dtype='f8')
@@ -328,7 +333,7 @@ class Model:
         z = []
         w = []
         for islow in range(nslow):
-            self.logger.info('B-scan %d in volume %d.'%(islow,vidx))
+            self.logger.info('Aligning A-scans, %d of %d in volume %d.'%(islow*nfast,nslow*nfast,vidx))
             for ifast in range(nfast):
                 #self.logger.info('A-scan %d.'%ifast)
                 test = avol[:,islow,ifast]
@@ -341,8 +346,10 @@ class Model:
                 
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
-
+        
+        self.logger.info('Spline fitting surface to A-line axial positions.')
         tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
+        self.logger.info('Evaluating spline function at A-line coordinates.')
         fit_surface = bisplev(np.arange(nfast),np.arange(nslow),tck)
 
         goodness_used = np.zeros(goodness_submatrix.shape)
