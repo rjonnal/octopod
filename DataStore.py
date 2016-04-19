@@ -103,7 +103,11 @@ class H5(DataStore):
 
     def require_group(self,location):
         self.h5.require_group(location)
-        
+
+
+    def get_shape(self,location):
+        return self.h5[location].shape
+    
     def make(self,location,dims,dtype='f8',short_descriptor=None):
         #"<i1", "<i2", "<i4", "<i8", ">i1", ">i2", ">i4", ">i8", "|i1", "|u1", 
         #"<u1", "<u2", "<u4", "<u8", ">u1", ">u2", ">u4", ">u8",

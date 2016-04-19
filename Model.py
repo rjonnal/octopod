@@ -5,10 +5,11 @@ import scipy as sp
 from scipy.ndimage.filters import generic_filter
 from scipy.interpolate import bisplrep,bisplev
 from matplotlib import pyplot as plt
-from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d
+from scipy.ndimage.morphology import grey_opening
+from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d,polyfit2d,polyval2d
 from octopod.Misc import H5
-import logging
 import octopod_config as ocfg
+import logging
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -195,34 +196,22 @@ class Model:
         plt.ylim([np.min(self.profile),np.max(self.profile)*1.1])
 
 
-    def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,5,15),goodness_threshold=0.25,use_spline_fit=True):
+    def write_volume_labels(self,z_tolerance=3,opening_strel=(1,15),goodness_threshold=0.25,use_fit=False):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
 
-        if use_spline_fit:
-            self.logger.info('write_volume_labels: using spline fit')
+        if use_fit:
+            self.logger.info('write_volume_labels: using fit')
             offset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
         else:
             offset_matrix = self.h5.get('model/z_offsets')[:].astype(np.float64)
-            self.logger.info('write_volume_labels: using offsets (no spline fit)')
+            self.logger.info('write_volume_labels: using offsets (no fit)')
 
         goodness_matrix = self.h5.get('model/z_offset_goodness')[:]
 
-        foffset_matrix = np.zeros(offset_matrix.shape)
-        foffset_matrix[:,:,:] = offset_matrix[:,:,:]
-        foffset_matrix[np.where(goodness_matrix<goodness_threshold)] = np.nan
-        foffset_matrix = generic_filter(foffset_matrix,np.nanmedian,medfilt_kernel,mode='nearest')
-        
-        # now, filter out clear outliers; replace with global mode
-        mode = sp.stats.mode(offset_matrix.ravel())[0][0]
-        
-        mask = np.zeros(foffset_matrix.shape)
-        lower_threshold = np.mean(offset_matrix)-1.5*np.std(offset_matrix)
-        upper_threshold = np.mean(offset_matrix)+1.5*np.std(offset_matrix)
-        cond = np.logical_and(foffset_matrix>lower_threshold,foffset_matrix<upper_threshold)
-        mask[np.where(cond)] = 1
-        self.logger.info('Fraction of pixels in offset matrix deemed valid: %0.4f.'%(np.sum(mask)/np.prod(mask.shape)))
-        self.logger.info('Setting invalid pixels to offset mode: %d'%mode)
-        foffset_matrix[np.where(1-mask)] = mode
+        soffset_matrix = np.zeros_like(offset_matrix)
+        for k in range(offset_matrix.shape[0]):
+            soffset_matrix[k,:,:] = grey_opening(offset_matrix[k,:,:],opening_strel)
+            
         label_keys = self.h5.get('model/labels').keys()
         labels = {}
         volume_labels = {}
@@ -235,13 +224,6 @@ class Model:
             
         for ivol in range(nvol):
             avol = np.abs(self.h5.get('processed_data')[ivol,:,:,:])
-            # plt.subplot(121)
-            # plt.imshow(offset_matrix[ivol,:,:])
-            # plt.colorbar()
-            # plt.subplot(122)
-            # plt.imshow(foffset_matrix[ivol,:,:])
-            # plt.colorbar()
-            # plt.show()
             self.logger.info('Labeling volume %d of %d.'%(ivol+1,nvol))
 
             for islow in range(nslow):
@@ -249,8 +231,7 @@ class Model:
                     self.logger.info('%d percent done.'%(float(islow+1)/float(nslow)*100))
                 for ifast in range(nfast):
                     test = avol[islow,:,ifast]
-                    offset = offset_matrix[ivol,islow,ifast]
-                    foffset = foffset_matrix[ivol,islow,ifast]
+                    offset = soffset_matrix[ivol,islow,ifast]
                     for key in label_keys:
                         model_z_index = labels[key]
                         temp = np.zeros(test.shape)
@@ -258,24 +239,9 @@ class Model:
                         z1,z2 = model_z_index-offset-z_tolerance,model_z_index-offset+z_tolerance
                         temp[:z1] = -np.inf
                         temp[z2+1:] = -np.inf
-                        
-                        # plt.subplot(311)
-                        # plt.cla()
-                        # self.plot_profile()
-                        # plt.subplot(312)
-                        # plt.cla()
-                        # plt.plot(test)
-                        # plt.axvspan(z1,z2,alpha=0.3)
-                        # plt.title(key)
-                        # print offset,z1,z2
-                        # plt.subplot(313)
-                        # plt.cla()
-                        # plt.plot(temp)
-                        # plt.pause(1)
                         max_idx = np.argmax(temp)
                         volume_labels[key][ivol,islow,ifast] = max_idx
                         projections[key][ivol,islow,ifast] = np.mean(test[max_idx-z_tolerance:max_idx+z_tolerance+1])
-            print
 
         for key in label_keys:
             location = 'model/volume_labels/%s'%key
@@ -331,7 +297,6 @@ class Model:
             avol = avol[:len(profile),:,:]
             ndepth,nslow,nfast = avol.shape
 
-
         x = []
         y = []
         z = []
@@ -350,33 +315,54 @@ class Model:
             
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
-        
-        goodness_threshold=np.percentile(w,95)
-        self.logger.info('align_volume: Goodness 95th percentile %0.3f used as threshold.'%goodness_threshold)
-        #plt.hist(w,bins=100)
-        #plt.axvline(goodness_threshold)
-        #plt.show()
-        
-        valid = np.where(w>goodness_threshold)[0]
-        self.logger.info('align_volume: Using %d of %d points (%d percent) for spline fit.'%(len(valid),len(w),float(len(valid))/float(len(w))*100))
-        x = np.array(x)
-        y = np.array(y)
-        z = np.array(z)
-        w = np.array(w)
-        
-        x = x[valid]
-        y = y[valid]
-        z = z[valid]
-        w = w[valid]
-        
-        self.logger.info('Spline fitting surface to A-line axial positions.')
-        tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
-        self.logger.info('Evaluating spline function at A-line coordinates.')
-        fit_surface = bisplev(np.arange(nslow),np.arange(nfast),tck)
 
-        goodness_used = np.zeros(goodness_submatrix.shape)
-        goodness_used[np.where(goodness_submatrix>goodness_threshold)] = 1.0
-        
+
+        fitting = False
+        if fitting: # revisit this later; may be of use
+            ptile = 50
+            goodness_threshold=np.percentile(w,ptile)
+            self.logger.info('align_volume: Goodness %dth percentile %0.3f used as threshold.'%(ptile,goodness_threshold))
+            valid = np.where(w>goodness_threshold)[0]
+            self.logger.info('align_volume: Using %d of %d points (%d percent) for fit.'%(len(valid),len(w),float(len(valid))/float(len(w))*100))
+            x = np.array(x)
+            y = np.array(y)
+            z = np.array(z)
+            w = np.array(w)
+
+            x = x[valid]
+            y = y[valid]
+            z = z[valid]
+            w = w[valid]
+
+            #self.logger.info('Spline fitting surface to A-line axial positions.')
+            #tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
+            #self.logger.info('Evaluating spline function at A-line coordinates.')
+            #fit_surface = bisplev(np.arange(nslow),np.arange(nfast),tck)
+
+            self.logger.info('Polynomial fitting surface to A-line axial positions.')
+            p = polyfit2d(x,y,z,order=1)
+            self.logger.info('Evaluating polynomial function at A-line coordinates.')
+
+            xx,yy = np.meshgrid(np.arange(nfast),np.arange(nslow))
+            fit_surface = polyval2d(xx,yy,p)
+
+            print fit_surface
+            print fit_surface.shape
+            plt.figure()
+            plt.imshow(offset_submatrix,interpolation='none')
+            plt.colorbar()
+            plt.figure()
+            plt.imshow(fit_surface,interpolation='none')
+            plt.colorbar()
+
+            plt.show()
+
+
+            goodness_used = np.zeros(goodness_submatrix.shape)
+            goodness_used[np.where(goodness_submatrix>goodness_threshold)] = 1.0
+        else:
+            fit_surface = offset_submatrix
+            
         return offset_submatrix,goodness_submatrix,fit_surface
                 
                 

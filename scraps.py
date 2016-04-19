@@ -1,4 +1,35 @@
-    def crop(self):
+########### Code from original Model.py in which median filtering was used to smooth the offset matrix
+        # first make a 
+        
+
+
+
+
+        
+        foffset_matrix = np.zeros(offset_matrix.shape)
+        foffset_matrix[:,:,:] = offset_matrix[:,:,:]
+        foffset_matrix[np.where(goodness_matrix<goodness_threshold)] = np.nan
+
+
+
+        
+        foffset_matrix = generic_filter(foffset_matrix,np.nanmedian,medfilt_kernel,mode='nearest')
+        
+        # now, filter out clear outliers; replace with global mode
+        mode = sp.stats.mode(offset_matrix.ravel())[0][0]
+        
+        mask = np.zeros(foffset_matrix.shape)
+        lower_threshold = np.mean(offset_matrix)-1.5*np.std(offset_matrix)
+        upper_threshold = np.mean(offset_matrix)+1.5*np.std(offset_matrix)
+        cond = np.logical_and(foffset_matrix>lower_threshold,foffset_matrix<upper_threshold)
+        mask[np.where(cond)] = 1
+        self.logger.info('Fraction of pixels in offset matrix deemed valid: %0.4f.'%(np.sum(mask)/np.prod(mask.shape)))
+        self.logger.info('Setting invalid pixels to offset mode: %d'%mode)
+        foffset_matrix[np.where(1-mask)] = mode
+
+
+
+def crop(self):
         plt.plot(self.profile)
         plt.title('enter cropping coordinates in console')
         plt.pause(.1)
