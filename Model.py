@@ -239,10 +239,7 @@ class Model:
             # plt.colorbar()
             # plt.show()
             self.logger.info('Labeling volume %d of %d.'%(ivol+1,nvol))
-            plt.figure()
-            plt.imshow(foffset_matrix[ivol,:,:],interpolation='none')
-            plt.colorbar()
-            plt.show()
+
             for islow in range(nslow):
                 if (islow+1)%20==0:
                     self.logger.info('%d percent done.'%(float(islow+1)/float(nslow)*100))
@@ -350,17 +347,6 @@ class Model:
 
         goodness_used = np.zeros(goodness_submatrix.shape)
         goodness_used[np.where(goodness_submatrix>goodness_threshold)] = 1.0
-        
-        plt.figure()
-        plt.imshow(goodness_used,interpolation='none')
-        plt.colorbar()
-        plt.figure()
-        plt.imshow(offset_submatrix,interpolation='none')
-        plt.colorbar()
-        plt.figure()
-        plt.imshow(fit_surface,interpolation='none')
-        plt.colorbar()
-        #plt.show()
         
         return offset_submatrix,goodness_submatrix,fit_surface
                 
