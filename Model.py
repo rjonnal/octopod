@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import scipy as sp
 from scipy.ndimage.filters import generic_filter
+from scipy.interpolate import bisplrep,bisplev
 from matplotlib import pyplot as plt
 from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d
 from octopod.Misc import H5
@@ -196,7 +197,10 @@ class Model:
 
     def write_volume_labels(self,z_tolerance=2,medfilt_kernel=(1,5,15),goodness_threshold=0.25):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
+
         offset_matrix = self.h5.get('model/z_offsets')[:].astype(np.float64)
+        offset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
+
         goodness_matrix = self.h5.get('model/z_offset_goodness')[:]
 
         foffset_matrix = np.zeros(offset_matrix.shape)
@@ -235,6 +239,10 @@ class Model:
             # plt.colorbar()
             # plt.show()
             self.logger.info('Labeling volume %d of %d.'%(ivol+1,nvol))
+            plt.figure()
+            plt.imshow(foffset_matrix[ivol,:,:],interpolation='none')
+            plt.colorbar()
+            plt.show()
             for islow in range(nslow):
                 if (islow+1)%20==0:
                     self.logger.info('%d percent done.'%(float(islow+1)/float(nslow)*100))
@@ -279,23 +287,27 @@ class Model:
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
         offset_matrix = self.h5.make('model/z_offsets',(nvol,nslow,nfast),dtype='i2')
         goodness_matrix = self.h5.make('model/z_offset_goodness',(nvol,nslow,nfast),dtype='f8')
-        om,gm = self.align_volumes()
+        fit_matrix = self.h5.make('model/z_offset_fit',(nvol,nslow,nfast),dtype='f8')
+        om,gm,fm = self.align_volumes()
         offset_matrix[...] = om[...]
         goodness_matrix[...] = gm[...]
-
+        fit_matrix[...] = fm[...]
+        
     def align_volumes(self):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
         offset_matrix = np.zeros((nvol,nslow,nfast))
         goodness_matrix = np.zeros((nvol,nslow,nfast))
+        fit_surface_matrix = np.zeros((nvol,nslow,nfast))
         
         for ivol in range(nvol):
-            offset,goodness = self.align_volume(vidx=ivol)
+            offset,goodness,fit = self.align_volume(vidx=ivol)
             offset_matrix[ivol,:,:] = offset
             goodness_matrix[ivol,:,:] = goodness
+            fit_surface_matrix[ivol,:,:] = fit
 
-        return offset_matrix,goodness_matrix
+        return offset_matrix,goodness_matrix,fit_surface_matrix
         
-    def align_volume(self,vidx=0,rad=5):
+    def align_volume(self,vidx=0,rad=5,goodness_threshold=0.0):
         avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
         avol = np.swapaxes(avol,0,1)
 
@@ -312,17 +324,45 @@ class Model:
         if ndepth>len(profile):
             avol = avol[:len(profile),:,:]
             ndepth,nslow,nfast = avol.shape
-            
+
+
+        x = []
+        y = []
+        z = []
+        w = []
         for islow in range(nslow):
             self.logger.info('B-scan %d in volume %d.'%(islow,vidx))
             for ifast in range(nfast):
                 #self.logger.info('A-scan %d.'%ifast)
                 test = avol[:,islow,ifast]
                 offset,goodness = translation1(profile,test,debug=False)
+                if goodness>goodness_threshold:
+                    x.append(ifast)
+                    y.append(islow)
+                    z.append(offset)
+                    w.append(goodness)
+                
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
-                
-        return offset_submatrix,goodness_submatrix
+
+        tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
+        fit_surface = bisplev(np.arange(nfast),np.arange(nslow),tck)
+
+        goodness_used = np.zeros(goodness_submatrix.shape)
+        goodness_used[np.where(goodness_submatrix>goodness_threshold)] = 1.0
+        
+        plt.figure()
+        plt.imshow(goodness_used,interpolation='none')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(offset_submatrix,interpolation='none')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(fit_surface,interpolation='none')
+        plt.colorbar()
+        #plt.show()
+        
+        return offset_submatrix,goodness_submatrix,fit_surface
                 
                 
     def cleanup_modeldb(self):
@@ -568,7 +608,7 @@ def test():
     #m.make_model()
     #m.clear_labels()
     #m.click_label()
-    #m.write_axial_alignment()
+    m.write_axial_alignment()
     m.write_volume_labels()
     
 if __name__=='__main__':
