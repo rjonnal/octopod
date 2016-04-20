@@ -235,8 +235,8 @@ class Model:
                     offset = soffset_matrix[ivol,islow,ifast]
                     for key in label_keys:
                         model_z_index = labels[key]
-                        volume_labels[key][ivol,islow,ifast] = model_z_index
-                        projections[key][ivol,islow,ifast] = np.mean(test[model_z_index-z_range:model_z_index+z_range+1])
+                        volume_labels[key][ivol,islow,ifast] = model_z_index-offset
+                        projections[key][ivol,islow,ifast] = np.mean(test[model_z_index-offset-z_range:model_z_index-offset+z_range+1])
 
         for key in label_keys:
             location = 'model/volume_labels/%s'%key
