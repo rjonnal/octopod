@@ -6,6 +6,7 @@ from scipy.ndimage.filters import generic_filter
 from scipy.interpolate import bisplrep,bisplev
 from matplotlib import pyplot as plt
 from scipy.ndimage.morphology import grey_opening
+from scipy.ndimage.filters import median_filter
 from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d,polyfit2d,polyval2d
 from octopod.Misc import H5
 import octopod_config as ocfg
@@ -196,9 +197,8 @@ class Model:
         plt.ylim([np.min(self.profile),np.max(self.profile)*1.1])
 
 
-    def write_volume_labels(self,z_tolerance=3,opening_strel=(1,15),goodness_threshold=0.25,use_fit=False):
+    def write_volume_labels(self,z_range=2,opening_strel=(1,15),goodness_threshold=0.25,use_fit=True):
         nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
-
         if use_fit:
             self.logger.info('write_volume_labels: using fit')
             soffset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
@@ -235,14 +235,8 @@ class Model:
                     offset = soffset_matrix[ivol,islow,ifast]
                     for key in label_keys:
                         model_z_index = labels[key]
-                        temp = np.zeros(test.shape)
-                        temp[...] = test[...]
-                        z1,z2 = model_z_index-offset-z_tolerance,model_z_index-offset+z_tolerance
-                        temp[:z1] = -np.inf
-                        temp[z2+1:] = -np.inf
-                        max_idx = np.argmax(temp)
-                        volume_labels[key][ivol,islow,ifast] = max_idx
-                        projections[key][ivol,islow,ifast] = np.mean(test[max_idx-z_tolerance:max_idx+z_tolerance+1])
+                        volume_labels[key][ivol,islow,ifast] = model_z_index
+                        projections[key][ivol,islow,ifast] = np.mean(test[model_z_index-z_range:model_z_index+z_range+1])
 
         for key in label_keys:
             location = 'model/volume_labels/%s'%key
@@ -303,7 +297,7 @@ class Model:
         z = []
         w = []
         for islow in range(nslow):
-            pct_done = int(100*round(float(islow)/float(nslow)))
+            pct_done = int(round(100*float(islow)/float(nslow)))
             if islow%10==0:
                 self.logger.info('align_volume: Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
             for ifast in range(nfast):
@@ -321,47 +315,54 @@ class Model:
 
         fitting = True
         if fitting: # revisit this later; may be of use
-            ptile = 50
-            goodness_threshold=np.percentile(w,ptile)
-            self.logger.info('align_volume: Goodness %dth percentile %0.3f used as threshold.'%(ptile,goodness_threshold))
-            valid = np.where(w>goodness_threshold)[0]
-            self.logger.info('align_volume: Using %d of %d points (%d percent) for fit.'%(len(valid),len(w),float(len(valid))/float(len(w))*100))
-            x = np.array(x)
-            y = np.array(y)
-            z = np.array(z)
-            w = np.array(w)
+            # ptile = 75
+            # goodness_threshold=np.percentile(w,ptile)
+            # self.logger.info('align_volume: Goodness %dth percentile %0.3f used as threshold.'%(ptile,goodness_threshold))
+            # valid = np.where(w>goodness_threshold)[0]
+            # self.logger.info('align_volume: Using %d of %d points (%d percent) for fit.'%(len(valid),len(w),float(len(valid))/float(len(w))*100))
+            # x = np.array(x)
+            # y = np.array(y)
+            # z = np.array(z)
+            # w = np.array(w)
 
-            x = x[valid]
-            y = y[valid]
-            z = z[valid]
-            w = w[valid]
+            # x = x[valid]
+            # y = y[valid]
+            # z = z[valid]
+            # w = w[valid]
 
             #self.logger.info('Spline fitting surface to A-line axial positions.')
             #tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
             #self.logger.info('Evaluating spline function at A-line coordinates.')
             #fit_surface = bisplev(np.arange(nslow),np.arange(nfast),tck)
 
-            self.logger.info('Polynomial fitting surface to A-line axial positions.')
-            p = polyfit2d(x,y,z,order=1)
-            self.logger.info('Evaluating polynomial function at A-line coordinates.')
-
-            xx,yy = np.meshgrid(np.arange(nfast),np.arange(nslow))
-            fit_surface = polyval2d(xx,yy,p)
+            #self.logger.info('Polynomial fitting surface to A-line axial positions.')
+            #p = polyfit2d(x,y,z,order=2)
+            #self.logger.info('Evaluating polynomial function at A-line coordinates.')
+            #xx,yy = np.meshgrid(np.arange(nfast),np.arange(nslow))
+            #fit_surface = polyval2d(xx,yy,p)
     
-            print fit_surface
-            print fit_surface.shape
-            plt.figure()
-            plt.imshow(offset_submatrix,interpolation='none')
-            plt.colorbar()
-            plt.figure()
-            plt.imshow(fit_surface,interpolation='none')
-            plt.colorbar()
+            self.logger.info('Median filtering to create a smoothed offset surface.')
+            fit_surface = median_filter(offset_submatrix,(3,21))
+    
+            # print fit_surface
+            # print fit_surface.shape
+            if False:
+                clim = np.min(offset_submatrix),np.max(offset_submatrix)
+                plt.figure()
+                plt.imshow(offset_submatrix,interpolation='none',clim=clim)
+                plt.colorbar()
+                plt.figure()
+                plt.imshow(fit_surface,interpolation='none',clim=clim)
+                plt.colorbar()
+                plt.figure()
+                plt.imshow(offset_submatrix-fit_surface,interpolation='none')
+                plt.colorbar()
 
-            plt.show()
+                plt.show()
 
 
-            goodness_used = np.zeros(goodness_submatrix.shape)
-            goodness_used[np.where(goodness_submatrix>goodness_threshold)] = 1.0
+            #goodness_used = np.zeros(goodness_submatrix.shape)
+            #goodness_used[np.where(goodness_submatrix>goodness_threshold)] = 1.0
         else:
             fit_surface = offset_submatrix
             

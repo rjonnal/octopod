@@ -163,6 +163,7 @@ class Reporter:
                 plt.colorbar(fraction=0.046, pad=0.04)
                 plt.xticks([])
                 plt.yticks([])
+                self.logger.info('projections_report: Writing %s projection to %s.'%(key,outfn))
                 plt.savefig(outfn,dpi=dpi)
                 plt.close()
                 plt.figure(figsize=(nfi,nsi))
@@ -177,6 +178,7 @@ class Reporter:
                 plt.colorbar(fraction=0.046, pad=0.04)
                 plt.xticks([])
                 plt.yticks([])
+                self.logger.info('projections_report: Writing %s offsets to %s.'%(key,outfn))
                 plt.savefig(outfn,dpi=dpi)
                 if show:
                     plt.pause(1)
