@@ -201,17 +201,17 @@ class Model:
 
         if use_fit:
             self.logger.info('write_volume_labels: using fit')
-            offset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
+            soffset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
         else:
             offset_matrix = self.h5.get('model/z_offsets')[:].astype(np.float64)
             self.logger.info('write_volume_labels: using offsets (no fit)')
-
-        goodness_matrix = self.h5.get('model/z_offset_goodness')[:]
-
-        soffset_matrix = np.zeros_like(offset_matrix)
-        for k in range(offset_matrix.shape[0]):
-            soffset_matrix[k,:,:] = grey_opening(offset_matrix[k,:,:],opening_strel)
+            soffset_matrix = np.zeros_like(offset_matrix)
+            for k in range(offset_matrix.shape[0]):
+                soffset_matrix[k,:,:] = grey_opening(offset_matrix[k,:,:],opening_strel)
             
+
+        #goodness_matrix = self.h5.get('model/z_offset_goodness')[:]
+
         label_keys = self.h5.get('model/labels').keys()
         labels = {}
         volume_labels = {}
@@ -224,11 +224,12 @@ class Model:
             
         for ivol in range(nvol):
             avol = np.abs(self.h5.get('processed_data')[ivol,:,:,:])
-            self.logger.info('Labeling volume %d of %d.'%(ivol+1,nvol))
+            self.logger.info('write_volume_labels: Labeling volume %d of %d.'%(ivol+1,nvol))
+            self.logger.info('write_volume_labels: Labels: %s.'%','.join(label_keys))
 
             for islow in range(nslow):
                 if (islow+1)%20==0:
-                    self.logger.info('%d percent done.'%(float(islow+1)/float(nslow)*100))
+                    self.logger.info('write_volume_labels: %d percent done.'%(float(islow+1)/float(nslow)*100))
                 for ifast in range(nfast):
                     test = avol[islow,:,ifast]
                     offset = soffset_matrix[ivol,islow,ifast]
@@ -302,11 +303,9 @@ class Model:
         z = []
         w = []
         for islow in range(nslow):
-            done = []
-            pct_done = int(round(float((islow+1)*nfast)/float(nslow*nfast)*100))
-            if pct_done%5==0 and not pct_done in done:
+            pct_done = int(100*round(float(islow)/float(nslow)))
+            if islow%10==0:
                 self.logger.info('align_volume: Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
-                done.append(pct_done)
             for ifast in range(nfast):
                 #self.logger.info('A-scan %d.'%ifast)
                 test = avol[:,islow,ifast]
@@ -320,7 +319,7 @@ class Model:
                 goodness_submatrix[islow,ifast] = goodness
 
 
-        fitting = False
+        fitting = True
         if fitting: # revisit this later; may be of use
             ptile = 50
             goodness_threshold=np.percentile(w,ptile)
@@ -348,7 +347,7 @@ class Model:
 
             xx,yy = np.meshgrid(np.arange(nfast),np.arange(nslow))
             fit_surface = polyval2d(xx,yy,p)
-
+    
             print fit_surface
             print fit_surface.shape
             plt.figure()
