@@ -12,7 +12,7 @@ from octopod.Misc import H5
 import octopod_config as ocfg
 import logging
 logging.basicConfig(level=logging.DEBUG)
-
+from octopod import Model
 
 class Cropper:
 
@@ -30,7 +30,7 @@ class Cropper:
 
 
     def crop(self):
-
+        self.logger.info('crop: Starting')
         vols = np.abs(self.h5.get('/processed_data')[:])
 
         nv,ns,nd,nf = vols.shape
@@ -44,21 +44,22 @@ class Cropper:
         self.profile = np.mean(np.mean(sumvol,axis=2),axis=0)
 
         global clicks
-        crop_lims = self.autocrop(do_plot=True)
-        clicks = [crop_lims[0],crop_lims[1]]
-        print clicks
-        
+
+        if len(self.profile)==1024:
+            crop_lims = self.autocrop(do_plot=False)
+            clicks = [crop_lims[0],crop_lims[1]]
+        else:
+            clicks = []
+            
         fig = plt.figure(figsize=(10,6))
         
         def onclick(event):
             global clicks
             newclick = round(event.xdata)
             clicks.append(newclick)
-            print clicks,
             if len(clicks)>=2:
                 clicks = clicks[-2:]
 
-            print clicks
             plt.cla()
             plt.plot(self.profile)
             for click in clicks:
@@ -79,22 +80,66 @@ class Cropper:
             z1 = np.min(clicks)
             z2 = np.max(clicks)
             self.profile = self.profile[z1:z2+1]
+        else:
+            self.logger.info('crop: No crop points selected. Exiting.')
+            return
 
-        print self.h5.get('model').keys()
 
+        def write(loc,val):
+            self.logger.info('crop: Writing to %s'%loc)
+            try:
+                self.h5.put(loc,val)
+            except Exception as e:
+                self.logger.error('crop: Error: could not complete write.')
+        
+        # crop the model profile:
+        model_profile = self.h5['/model/profile'][:]
+        model_profile = model_profile[z1:z2]
+        write('/model/profile',model_profile)
+        
+        # fix the model labels:
+        for key in self.h5['/model/labels/'].keys():
+            val = self.h5['/model']['labels'][key].value
+            val = val - z1
+            write('/model/labels/%s'%key,val)
 
+        for key in self.h5['/model/volume_labels'].keys():
+            val = self.h5['/model']['volume_labels'][key][:]
+            val = val - z1
+            write('/model/volume_labels/%s'%key,val)
+
+        val = self.h5['/model/z_offsets'][:]
+        val = val - z1
+        write('/model/z_offsets',val)
+
+        val = self.h5['/model/z_offset_fit'][:]
+        val = val - z1
+        write('/model/z_offset_fit',val)
+
+        val = self.h5['/processed_data'][:]
+        val = val[:,:,z1:z2,:]
+        write('/processed_data',val)
+            
     def autocrop(self,noise_border=200,do_plot=False):
 
         x_in = np.arange(noise_border)
         y_in = self.profile[:noise_border]
 
+
+        noise_rms = np.std(y_in)
+        
         p = np.polyfit(x_in,np.log(y_in),deg=1)
 
         x_out = np.arange(len(self.profile))
         y_out_log = np.polyval(p,x_out)
         
-        y_out = np.exp(y_out_log+.1)
+        y_out = np.exp(y_out_log)+3*noise_rms
+
+
+        
         test = self.profile-y_out
+
+        
         valid = np.where(test>0)[0]
 
         if do_plot:
@@ -104,11 +149,13 @@ class Cropper:
             plt.plot(x_out,y_out,'r-',label='fit')
             plt.legend()
             plt.show()
-        return valid[0],valid[-1]
+        return valid[0]-10,valid[-1]+10
 
 
 def test():
     h5 = H5('./oct_test_volume/oct_test_volume_2T.hdf5')
+    #m = Model(h5)
+    #m.click_label()
     c = Cropper(h5,True)
     c.crop()
     
