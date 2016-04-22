@@ -426,7 +426,7 @@ class Model:
         done = False or not len(peaks)
 
 
-        fig = plt.figure(figsize=(22,16))
+        fig = plt.figure(figsize=(22,12))
         for key in plt.rcParams.keys():
             if key[:6]=='keymap':
                 plt.rcParams[key] = ''
@@ -477,6 +477,7 @@ class Model:
             cmax = np.percentile(bscan,99.95) # saturate 0.05% of pixels
             plt.imshow(bscan,interpolation='none',clim=(cmin,cmax),cmap='gray')
             for label in label_dict.keys():
+                print label,label_dict[label]
                 label_z = z[label_dict[label]]
                 th = plt.text(bscan.shape[1],label_z-offset,label,ha='left',va='center',fontsize=8)
             try:

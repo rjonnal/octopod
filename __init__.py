@@ -17,3 +17,4 @@ from movie import *
 from VisualizationTools import *
 from Reporter import *
 from Series import *
+from Cropper import *

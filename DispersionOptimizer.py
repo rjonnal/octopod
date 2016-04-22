@@ -113,9 +113,9 @@ class DispersionOptimizer:
             
         return out
 
-    def optimize(self,test_frame=None,dry_run=False,do_plot=False,method='brute'):
+    def optimize(self,test_frame=None,dry_run=False,do_plot=False,method='brute',n_lines=1000):
         if test_frame is None:
-            test_frame = self.make_test_frame(1000)
+            test_frame = self.make_test_frame(n_lines)
             
         coarse_log = []
         fine_log = []

@@ -3,13 +3,17 @@ import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
 import logging
+import octopod_config as ocfg
+
 from octopod.AcquisitionParameterFile import AcquisitionParameterFile
 from octopod.DataStore import H5
 from octopod.Misc import EccentricityGuesser, IDGenerator
 from octopod.Processor import OCTProcessor
 from octopod.DispersionOptimizer import DispersionOptimizer
-import octopod_config as ocfg
-
+from octopod.Cropper import Cropper
+from octopod.Model import Model
+from octopod.BScanAligner import BScanAligner
+from octopod.Reporter import Reporter
 
 class Dataset:
 
@@ -59,10 +63,51 @@ class Dataset:
         op = OCTProcessor(self.h5)
         op.run()
 
-    def optimize_dispersion(self):
+    def optimize_dispersion(self,n_lines=1000):
         do = DispersionOptimizer(self.h5)
-        do.optimize()
-        
+        do.optimize(n_lines=n_lines)
+
+    def crop(self):
+        c = Cropper(self.h5)
+        c.crop()
+
+    def model(self):
+        m = Model(self.h5)
+        m.click_label()
+
+    def align(self,do_plot=False):
+        bsa = BScanAligner(self.h5)
+        bsa.align_volumes(do_plot=do_plot)
+
+
+    def label(self):
+        m = Model(self.h5)
+        m.write_axial_alignment()
+        m.write_volume_labels()
+
+
+    def report(self):
+        report_directory = self.h5.filename.replace('.hdf5','')+'_report'
+        r = Reporter(self.h5,report_directory=report_directory)
+        try:
+            r.processed_report()
+        except Exception as e:
+            self.logger.info('processed_report: Could not complete: %s'%e)
+        try:
+            r.model_report()
+        except Exception as e:
+            self.logger.info('model_report: Could not complete: %s'%e)
+        try:
+            r.dispersion_report()
+        except Exception as e:
+            self.logger.info('dispersion_report: Could not complete: %s'%e)
+        try:
+            r.projections_report()
+        except Exception as e:
+            self.logger.info('projections_report: Could not complete: %s'%e)
+
+
+            
     def initialize(self,system_label):
 
         self.h5 = H5(self.h5fn)
@@ -97,7 +142,7 @@ class Dataset:
         self.h5.put('k_out',self.k_out)
         self.h5.put('system_label',system_label)
 
-        self.h5.put('dispersion/coefficients',[0.0,0.0])
+        #self.h5.put('dispersion/coefficients',[0.0,0.0])
         
         self.ecc_to_h5()
         self.make_ids()

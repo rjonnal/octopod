@@ -17,17 +17,22 @@ from octopod import Model
 class Cropper:
 
     def __init__(self,h5,debug=False):
-        """Initialize model. May pass an h5py.File object or .hdf5 filename.
-        The file or object must contain a 'processed_data' dataset containing
-        at least one volume."""
+        """Initialize Cropper. May pass an h5py.File object or .hdf5 filename.
+        The cropper crops the processed volume data cube, interactively, and
+        updates all of the following, when they exist, because each of them
+        is defined (implicitly) relative to the coordinates of the original
+        processed data cube:
+        model profile
+        model labels
+        z offsets and z offset fit
+        volume labels
+        """
         self.logger = logging.getLogger(__name__)
         if type(h5)==str:
             self.h5 = H5(h5)
             self.logger.info('Opening file %s.'%self.h5)
         else:
             self.h5 = h5
-
-
 
     def crop(self):
         self.logger.info('crop: Starting')
@@ -72,7 +77,9 @@ class Cropper:
         if len(clicks):
             for click in clicks:
                 plt.axvline(click)
-                
+
+
+        plt.title('Click crop points and close window to complete cropping.')
         plt.show()
 
         if len(clicks)>=2:
@@ -91,34 +98,56 @@ class Cropper:
                 self.h5.put(loc,val)
             except Exception as e:
                 self.logger.error('crop: Error: could not complete write.')
-        
-        # crop the model profile:
-        model_profile = self.h5['/model/profile'][:]
-        model_profile = model_profile[z1:z2]
-        write('/model/profile',model_profile)
-        
-        # fix the model labels:
-        for key in self.h5['/model/labels/'].keys():
-            val = self.h5['/model']['labels'][key].value
+
+        try:
+            # crop the model profile:
+            model_profile = self.h5['/model/profile'][:]
+            model_profile = model_profile[z1:z2]
+            write('/model/profile',model_profile)
+        except Exception as e:
+            self.logger.info('Cannot crop model profile: %s'%e)
+
+        try:
+            # fix the model labels:
+            for key in self.h5['/model/labels/'].keys():
+                val = self.h5['/model']['labels'][key].value
+                val = val - z1
+                write('/model/labels/%s'%key,val)
+        except Exception as e:
+            self.logger.info('Cannot fix model labels: %s'%e)
+
+        try:
+            # fix the 2D layer labels
+            for key in self.h5['/model/volume_labels'].keys():
+                val = self.h5['/model']['volume_labels'][key][:]
+                val = val - z1
+                write('/model/volume_labels/%s'%key,val)
+        except Exception as e:
+            self.logger.info('Cannot fix volume labels: %s'%e)
+
+        try:
+            # fix z-offsets (offset between model and processed data cube)
+            val = self.h5['/model/z_offsets'][:]
             val = val - z1
-            write('/model/labels/%s'%key,val)
+            write('/model/z_offsets',val)
+        except Exception as e:
+            self.logger.info('Cannot fix offsets: %s'%e)
 
-        for key in self.h5['/model/volume_labels'].keys():
-            val = self.h5['/model']['volume_labels'][key][:]
+        try:
+            # fix the offset fit (a smoothed version of z-offsets)
+            val = self.h5['/model/z_offset_fit'][:]
             val = val - z1
-            write('/model/volume_labels/%s'%key,val)
+            write('/model/z_offset_fit',val)
+        except Exception as e:
+            self.logger.info('Cannot fix offset fit: %s'%e)
 
-        val = self.h5['/model/z_offsets'][:]
-        val = val - z1
-        write('/model/z_offsets',val)
-
-        val = self.h5['/model/z_offset_fit'][:]
-        val = val - z1
-        write('/model/z_offset_fit',val)
-
-        val = self.h5['/processed_data'][:]
-        val = val[:,:,z1:z2,:]
-        write('/processed_data',val)
+        try:
+            # last, but not least, crop the data
+            val = self.h5['/processed_data'][:]
+            val = val[:,:,z1:z2,:]
+            write('/processed_data',val)
+        except Exception as e:
+            self.logger.info('Cannot crop processed_data: %s'%e)
             
     def autocrop(self,noise_border=200,do_plot=False):
 

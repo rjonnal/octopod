@@ -10,16 +10,24 @@ class BScanAligner:
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating BScanAligner object.')
 
-    def z_align_rough(self,iVol=0,do_plot=True):
+    def align_volumes(self,do_plot=False):
+        nVol = self.h5.get('processed_data').shape[0]
+        for iVol in range(nVol):
+            self.align_volume(iVol,do_plot=do_plot)
+            
+    def align_volume(self,iVol=0,do_plot=False):
         # this method returns a coarsely aligned volume
         # if '/bscan_alignment_vector' exists, it uses this to
         # align the b-scans; if not, it creates that vector first.
-        sv_key = '/axial_alignment/slow_vector'
-        fv_key = '/axial_alignment/fast_vector'
-        ff_key = '/axial_alignment/fast_flattened_volume'
-        sf_key = '/axial_alignment/slow_flattened_volume'
-        #self.h5.delete(sv_key)
-        #self.h5.delete(fv_key)
+        sv_key = '/axial_alignment/slow_vector_%03d'%iVol
+        fv_key = '/axial_alignment/fast_vector_%03d'%iVol
+        ff_key = '/axial_alignment/fast_flattened_volume_%03d'%iVol
+        sf_key = '/axial_alignment/slow_flattened_volume_%03d'%iVol
+        self.h5.delete(sv_key)
+        self.h5.delete(fv_key)
+        self.h5.delete(ff_key)
+        self.h5.delete(sf_key)
+
         try:
             zvec = self.h5.get(fv_key)[:]
         except Exception as e:
@@ -78,15 +86,7 @@ class BScanAligner:
                 if k%20==0:
                     self.logger.info('z_align_rough: %d percent done.'%(float(k)/float(nf)*100))
                 outvol[:,zvec[k]:zvec[k]+nd,k] = invol[:,:,k]
-
             self.h5.put(ff_key,outvol)
-
-
-        # for k in range(3):
-        #     plt.figure()
-        #     plt.imshow(np.mean(np.abs(outvol),axis=k),interpolation='none',aspect='auto')
-
-        # plt.show()
 
 
         try:
@@ -138,15 +138,13 @@ class BScanAligner:
                 if k%20==0:
                     self.logger.info('z_align_rough: %d percent done'%(float(k)/float(ns)*100))
                 outvol2[k,zvec[k]:zvec[k]+nd,:] = outvol[k,:,:]
-
-                
             self.h5.put(sf_key,outvol2)
 
-            
-        for k in range(3):
-            plt.figure()
-            plt.imshow(np.mean(np.abs(outvol2),axis=k))
-        plt.show()
+        if do_plot:
+            for k in range(3):
+                plt.figure()
+                plt.imshow(np.mean(np.abs(outvol2),axis=k))
+            plt.show()
 
 
 

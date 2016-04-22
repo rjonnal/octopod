@@ -50,11 +50,20 @@ class Processor:
 class OCTProcessor(Processor):
     def __init__(self,h5):
         Processor.__init__(self,h5,pre_dataset='/raw_data',post_dataset='/processed_data')
-        print self.h5.h5
         self.k_in = self.h5.get('k_in')
         self.k_out = self.h5.get('k_out')
 
     def run(self):
+        # if we're re-processing, we should make sure to delete the model and projections
+        try:
+            self.h5.delete('model')
+        except Exception as e:
+            self.logger.info('run: Cannot delete model: %s'%e)
+        try:
+            self.h5.delete('projections')
+        except Exception as e:
+            self.logger.info('run: Cannot delete projectoins: %s'%e)
+            
         n_vol,n_slow,n_fast,n_depth = self.h5.get(self.pre_dataset).shape
         out_block = np.zeros((n_vol,n_slow,n_depth/2,n_fast),dtype=np.complex64)
         c = self.h5.get('dispersion/coefficients')[:]
@@ -67,9 +76,10 @@ class OCTProcessor(Processor):
                 out_block[v,s,:,:] = test_frame
 
         self.h5.put(self.post_dataset,out_block)
-        plt.imshow(np.abs(self.h5.get('processed_data')[0][10]),aspect='auto',interpolation='none')
-        plt.pause(.0001)
-
+        #plt.figure()
+        #plt.imshow(np.abs(self.h5.get('processed_data')[0][10]),aspect='auto',interpolation='none')
+        #plt.pause(.0001)
+        #plt.close()
 
 if __name__=='__main__':
 
