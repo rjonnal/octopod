@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import sys,os
 from octopod import H5
+import glob
 
 class Series:
 
@@ -44,5 +45,11 @@ class Series:
 
 if __name__=='__main__':
 
-    s = Series('./oct_test_volume/oct_test_volume_2T.hdf5')
+    d = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.04.12_2/*.hdf5'
+    flist = glob.glob(d)
+    for f in flist:
+        h5 = H5(f)
+        print h5.keys()
+    
+    #s = Series('./oct_test_volume/oct_test_volume_2T.hdf5')
     
