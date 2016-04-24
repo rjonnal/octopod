@@ -8,49 +8,107 @@ logging.basicConfig(level='INFO')
 
 class StackAverager:
 
-    def __init__(self,vol,cache='./.StackAveragerCache.hdf5'):
+    def __init__(self,vol,scale_factor=1.0,cache_dir='./.sa_cache'):
         """Assume the slow dimension is the first dimension."""
+        self.vol = vol
+        self.id = '%d'%(self.string_to_id(self.vol[0,:,:]))
+        self.cache_dir = cache_dir
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+        self.scale_factor = scale_factor
+        self.h5 = H5(os.path.join(self.cache_dir,'%s_%0.1fx.hdf5'%(self.id,self.scale_factor)))
 
-        h5 = h5py.File(cache)
-        key = self.string_to_id(vol[0,:,:])
+    def scale(self,im):
+        factor = self.scale_factor
+        sy,sx = im.shape
+        newshape = int(round(sy*factor)),int(round(sx*factor))
+        fim = np.fft.ifft2(np.fft.fftshift(np.fft.fft2(im)),s=newshape)
+        aim = np.abs(fim)*factor**2
+        return aim
+        
+    def align_to(self,ref_idx=0,corr_threshold=0.67):
+        ref = self.vol[ref_idx,:,:]
+        ref = self.scale(ref)
+        key = '%03d'%ref_idx
 
+        sy,sx = ref.shape
         try:
-            self.xshifts = h5['%s/xshifts'][:]
-            self.yshifts = h5['%s/yshifts'][:]
-            self.corrs = h5['%s/corrs'][:]
+            xshifts = self.h5.get('%s/xshifts'%key)[:]
+            yshifts = self.h5.get('%s/yshifts'%key)[:]
+            corrs = self.h5.get('%s/corrs'%key)[:]
         except Exception as e:
-            ns,nd,nf = vol.shape
-            yshifts = []
             xshifts = []
+            yshifts = []
             corrs = []
-            for s in range(1,ns):
-                f1 = vol[s-1,:,:]
-                f2 = vol[s,:,:]
-                yshift,xshift,corr,nxc = utils.nxcorr2same(f1,f2)
+            for k in range(self.vol.shape[0]):
+                print k
+                tar = self.vol[k,:,:]
+                tar = self.scale(tar)
+                yshift,xshift,corr,nxc = utils.nxcorr2same(tar,ref)
                 yshifts.append(yshift)
                 xshifts.append(xshift)
                 corrs.append(corr)
-
-            yshifts = np.array(yshifts).astype(np.int)
+                
             xshifts = np.array(xshifts).astype(np.int)
+            yshifts = np.array(yshifts).astype(np.int)
             corrs = np.array(corrs)
-            
-            self.yshifts = yshifts
-            self.xshifts = xshifts
-            self.corrs = corrs
-            
-            h5.create_dataset('%s/xshifts',data=xshifts)
-            h5.create_dataset('%s/yshifts',data=yshifts)
-            h5.create_dataset('%s/corrs',data=corrs)
-            
+
+            self.h5.put('%s/xshifts'%key,xshifts)
+            self.h5.put('%s/yshifts'%key,yshifts)
+            self.h5.put('%s/corrs'%key,corrs)
+        
+
+        valid_idx = np.where(corrs>corr_threshold)[0]
+
+        xshifts = xshifts - np.min(xshifts[valid_idx])
+        yshifts = yshifts - np.min(yshifts[valid_idx])
+
+        xadd = np.max(xshifts[valid_idx])
+        yadd = np.max(yshifts[valid_idx])
+
+        sumimage = np.zeros((ref.shape[0]+yadd,ref.shape[1]+xadd))
+        counterimage = np.ones((ref.shape[0]+yadd,ref.shape[1]+xadd))
+
+        for v in valid_idx:
+            print v
+            xshift = xshifts[v]
+            yshift = yshifts[v]
+            sumimage[yshift:yshift+sy,xshift:xshift+sx] = sumimage[yshift:yshift+sy,xshift:xshift+sx] + self.vol[v,:,:]
+            counterimage[yshift:yshift+sy,xshift:xshift+sx] = counterimage[yshift:yshift+sy,xshift:xshift+sx] + 1
+
+        avimage = sumimage/counterimage
+        plt.figure()
+        plt.imshow(avimage)
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(sumimage)
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(counterimage)
+        plt.colorbar()
+        plt.show()
+        return
+        
         plt.figure()
         plt.plot(corrs)
         
         plt.figure()
         plt.plot(xshifts,'b')
         plt.plot(yshifts,'g')
+        plt.show()
 
-    def string_to_id(input_string,max_val=2**32):
+    def string_to_id(self,input_string,max_val=2**32):
         md5 = hashlib.md5()
         md5.update(input_string)
         return int(md5.hexdigest(),16)%max_val
+
+
+    def warp_to_fit(self,ref,tar,strip_width=20):
+        sy,sx = ref.shape
+
+        x1s = range(0,sx,strip_width)
+        x2s = x1s+strip_width
+        x2s[-1] = min(sx,x2s[-1])
+
+        
+        
