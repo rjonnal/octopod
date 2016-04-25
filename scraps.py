@@ -41,6 +41,35 @@
             #corrs.append(peakVal/ref.shape[1]/ref.shape[0]/self.strip_width)
 
 
+
+            # from when i was trying to insert the reference image in the stack:
+        yoffset = -np.min(y1s)
+        xoffset = -np.min(x1s)
+
+        if yoffset>=0:
+            # all strips are below top of reference
+            ry1 = 0
+            ry2 = self.rsy
+            outsy = max(np.max(y2s)+yoffset,ry2)
+        if xoffset>=0:
+            # all strips are to the right of reference
+            rx1 = 0
+            rx2 = self.rsx
+            outsx = max(np.max(x2s)+xoffset,rx2)
+        if yoffset<0:
+            # some strips are above top of reference
+            ry1 = -yoffset
+            ry2 = ry1 + self.rsy
+            outsy = max(np.max(y2s)+yoffset,ry2)
+        if xoffset<0:
+            # some strips start to the left of reference left edge
+            rx1 = -xoffset
+            rx2 = rx1 + self.rsx
+            outsx = max(np.max(x2s)+xoffset,rx2)
+
+            
+
+            
 ########### Code from original Model.py in which median filtering was used to smooth the offset matrix
         # first make a 
         

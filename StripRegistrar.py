@@ -40,7 +40,24 @@ class StripRegistrar:
         self.corrs = self.corrs + corrs
         self.current_layer = self.current_layer + 1
 
+    def info(self,layer_to_show=0):
+        def sublist(lst):
+            return [item for item,layer in zip(lst,self.layers) if layer==layer_to_show]
+
+        print zip(sublist(self.y1s),sublist(self.y2s),sublist(self.x1s),sublist(self.x2s),sublist(self.corrs))
+
     def render(self,corr_percentile=50):
+
+        # fix the -inf corr value set for reference image
+        cmax = np.max(self.corrs)
+        newcorrs = []
+        for corr in self.corrs:
+            if corr==-np.inf:
+                newcorrs.append(cmax)
+            else:
+                newcorrs.append(corr)
+        self.corrs = newcorrs
+        
         corr_thresh = np.percentile(self.corrs,corr_percentile)
         self.logger.info('render: correlation threshold: %0.2f'%corr_thresh)
         valid_idx = np.where(self.corrs>=corr_thresh)
@@ -54,49 +71,17 @@ class StripRegistrar:
         x2s = valid(self.x2s)
         strips = valid(self.strips)
 
-        yoffset = -np.min(y1s)
-        xoffset = -np.min(x1s)
-
         y1s = [y1-np.min(y1s) for y1 in y1s]
         y2s = [y1 + s.shape[0] for y1,s in zip(y1s,strips)]
 
         x1s = [x1-np.min(x1s) for x1 in x1s]
         x2s = [x1 + s.shape[1] for x1,s in zip(x1s,strips)]
-
-        if yoffset>=0:
-            # all strips are below top of reference
-            ry1 = 0
-            ry2 = self.rsy
-            outsy = max(np.max(y2s)+yoffset,ry2)
-        if xoffset>=0:
-            # all strips are to the right of reference
-            rx1 = 0
-            rx2 = self.rsx
-            outsx = max(np.max(x2s)+xoffset,rx2)
-        if yoffset<0:
-            # some strips are above top of reference
-            ry1 = -yoffset
-            ry2 = ry1 + self.rsy
-            outsy = max(np.max(y2s)+yoffset,ry2)
-        if xoffset<0:
-            # some strips start to the left of reference left edge
-            rx1 = -xoffset
-            rx2 = rx1 + self.rsx
-            outsx = max(np.max(x2s)+xoffset,rx2)
+        outsy = np.max(y2s)
+        outsx = np.max(x2s)
 
         sumimage = np.zeros((outsy,outsx))
-        #sumimage[ry1:ry2,rx1:rx2] = self.ref
-        #utils.scaleshow(sumimage)
         counterimage = np.zeros_like(sumimage)
-        print xoffset,yoffset,ry1,ry2
-        
-        y1s = [y1 - yoffset for y1 in y1s]
-        y2s = [y2 - yoffset for y2 in y2s]
-        x1s = [x1 + xoffset for x1 in x1s]
-        x2s = [x2 + xoffset for x2 in x2s]
-        
-        #sumimage = np.zeros((np.max(y2s),np.max(x2s)))
-        #counterimage = np.ones_like(sumimage)
+
 
         for y1,y2,x1,x2,strip in zip(y1s,y2s,x1s,x2s,strips):
             while(y1<0):
@@ -124,8 +109,6 @@ class StripRegistrar:
             sumimage[y1:y2,x1:x2] = sumimage[y1:y2,x1:x2] + strip
             counterimage[y1:y2,x1:x2] = counterimage[y1:y2,x1:x2] + 1
 
-        #utils.scaleshow(counterimage)
-        #utils.scaleshow(sumimage/counterimage,clim=utils.scaleshow(self.ref))
         counterimage[np.where(counterimage==0)]=1.0e-9
         return sumimage,counterimage
         
@@ -156,7 +139,6 @@ class StripRegistrar:
         sy,sx = im.shape
         out = np.zeros((np.max(yshifts)+self.strip_width,sx+np.max(xshifts)))
         for y1,y2,ys,xs,corr in zip(y1s,y2s,yshifts,xshifts,corrs):
-            print y1
             im_in = im[y1:y2,:]
             oy1 = ys
             oy2 = ys+self.strip_width
@@ -181,7 +163,6 @@ class StripRegistrar:
         # check to see if this is the reference image:
         epsilon = 1e-9
         test = np.abs(np.sum(im-self.ref))
-        print test
         is_reference = test<epsilon
         if is_reference:
             self.logger.info('get_reg_info: this is the reference image')
@@ -207,8 +188,8 @@ class StripRegistrar:
             expected_x = self.rsx
 
             if is_reference:
-                yshift = self.rsy - expected_y - 2
-                xshift = self.rsx - expected_x - 2
+                yshift = self.rsy - expected_y - 1
+                xshift = self.rsx - expected_x - 1
                 if xshift>sx/2:
                     xshift = xshift - sx + 2
                 xshifts.append(xshift)
@@ -278,19 +259,6 @@ class StripRegistrar:
             plt.close()
 
 
-        cmax = np.max(corrs)
-        newcorrs = []
-        for corr in corrs:
-            if corr==-np.inf:
-                newcorrs.append(cmax)
-            else:
-                newcorrs.append(corr)
-        corrs = newcorrs
-
-        # for y1,y2,ys,xs,corr in zip(y1s,y2s,yshifts,xshifts,corrs):
-        #     print y1,y2,ys,xs,corr
-
-        # sys.exit()
         
         return y1s,y2s,yshifts,xshifts,corrs
 
