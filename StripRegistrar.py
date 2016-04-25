@@ -4,24 +4,11 @@ from scipy.signal import correlate2d,convolve2d,fftconvolve
 from scipy.misc import imread
 import sys
 from octopod import utils
+from time import sleep
+import logging
+logging.basicConfig(level='INFO')
 
 
-def scaleshow(im,dpi=50,clim=None):
-    if clim is None:
-        clim = (np.min(im),np.max(im))
-        
-    sy,sx = im.shape
-    iy = float(sy)/float(dpi)
-    ix = float(sx)/float(dpi)*1.25
-    plt.figure(figsize=(ix,iy))
-    plt.axes([0,0,.8,1])
-    plt.imshow(im,interpolation='none',cmap='gray',clim=clim)
-    plt.xticks([])
-    plt.yticks([])
-    plt.colorbar(fraction=.05,pad=.05)
-    plt.pause(.1)
-    return clim
-    
 class StripRegistrar:
     def __init__(self,ref,strip_width=1,do_plots=False):
         """Strips must be horizontal. If the strips to be registered are vertical,
@@ -39,7 +26,9 @@ class StripRegistrar:
         self.layers = []
         self.corrs = []
         self.current_layer = 0
-
+        self.logger = logging.getLogger(__name__)
+        self.logger.info('Creating StripRegistrar object.')
+        
     def add(self,im,xmax=None,ymax=None):
         y1s,y2s,yshifts,xshifts,corrs = self.get_reg_info(im,xmax=xmax,ymax=ymax)
         self.strips = self.strips + [im[y1:y2,:] for y1,y2 in zip(y1s,y2s)]
@@ -53,6 +42,7 @@ class StripRegistrar:
 
     def render(self,corr_percentile=50):
         corr_thresh = np.percentile(self.corrs,corr_percentile)
+        self.logger.info('render: correlation threshold: %0.2f'%corr_thresh)
         valid_idx = np.where(self.corrs>=corr_thresh)
 
         def valid(lst):
@@ -95,13 +85,13 @@ class StripRegistrar:
             outsx = max(np.max(x2s)+xoffset,rx2)
 
         sumimage = np.zeros((outsy,outsx))
-        sumimage[ry1:ry2,rx1:rx2] = self.ref
-        scaleshow(sumimage)
-        counterimage = np.ones_like(sumimage)
-            
-
-        y1s = [y1 + yoffset for y1 in y1s]
-        y2s = [y2 + yoffset for y2 in y2s]
+        #sumimage[ry1:ry2,rx1:rx2] = self.ref
+        #utils.scaleshow(sumimage)
+        counterimage = np.zeros_like(sumimage)
+        print xoffset,yoffset,ry1,ry2
+        
+        y1s = [y1 - yoffset for y1 in y1s]
+        y2s = [y2 - yoffset for y2 in y2s]
         x1s = [x1 + xoffset for x1 in x1s]
         x2s = [x2 + xoffset for x2 in x2s]
         
@@ -109,12 +99,35 @@ class StripRegistrar:
         #counterimage = np.ones_like(sumimage)
 
         for y1,y2,x1,x2,strip in zip(y1s,y2s,x1s,x2s,strips):
+            while(y1<0):
+                self.logger.info('render: cropping strip')
+                strip = strip[1:,:]
+                y1 = y1 + 1
+
+            while (y2>outsy):
+                self.logger.info('render: cropping strip')
+                strip = strip[:-1,:]
+                y2 = y2 - 1
+
+            while (x1<0):
+                self.logger.info('render: cropping strip')
+                strip = strip[:,1:]
+                x1 = x1 + 1
+
+            while (x2>outsx):
+                self.logger.info('render: cropping strip')
+                strip = strip[:,:-1]
+                x2 = x2 - 1
+            
+            infostring = 'inserting %d x %d strip at %d, %d'%(strip.shape[0],strip.shape[1],y1,x1)
+            self.logger.info('render: %s'%infostring)
             sumimage[y1:y2,x1:x2] = sumimage[y1:y2,x1:x2] + strip
             counterimage[y1:y2,x1:x2] = counterimage[y1:y2,x1:x2] + 1
 
-        scaleshow(counterimage)
-        scaleshow(sumimage/counterimage,clim=scaleshow(self.ref))
-        return sumimage/counterimage
+        #utils.scaleshow(counterimage)
+        #utils.scaleshow(sumimage/counterimage,clim=utils.scaleshow(self.ref))
+        counterimage[np.where(counterimage==0)]=1.0e-9
+        return sumimage,counterimage
         
         
         
@@ -164,6 +177,15 @@ class StripRegistrar:
         
         
     def get_reg_info(self,im,xmax=None,ymax=None):
+
+        # check to see if this is the reference image:
+        epsilon = 1e-9
+        test = np.abs(np.sum(im-self.ref))
+        print test
+        is_reference = test<epsilon
+        if is_reference:
+            self.logger.info('get_reg_info: this is the reference image')
+        
         sy,sx = im.shape
 
         y1s = np.arange(0,sy,self.strip_width).astype(np.int)
@@ -180,15 +202,27 @@ class StripRegistrar:
             plt.figure(figsize=(8,12))
         
         for idx,(y1,y2) in enumerate(zip(y1s,y2s)):
+            self.logger.info('get_reg_info: registering strip %d of %d.'%(idx+1,len(y1s)))
+            expected_y = self.rsy - y1
+            expected_x = self.rsx
+
+            if is_reference:
+                yshift = self.rsy - expected_y - 2
+                xshift = self.rsx - expected_x - 2
+                if xshift>sx/2:
+                    xshift = xshift - sx + 2
+                xshifts.append(xshift)
+                yshifts.append(yshift)
+                corrs.append(-np.inf)
+                continue
+                
+            
             strip = im[y1:y2,:]
             strip = (strip - np.mean(strip))/np.std(strip)
             nxcval = fftconvolve(strip,self.ref[::-1,::-1],mode='full')
             #nxcval = np.real(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(strip,s=(2*sy,2*sx))*np.conj(np.fft.fft2(self.ref,s=(2*sy,2*sx))))))
             #nxcval = np.real((np.fft.ifft2(np.fft.fft2(strip,s=(sy,sx))*np.conj(np.fft.fft2(self.ref,s=(sy,sx))))))
 
-            expected_y = self.rsy - y1
-            expected_x = self.rsx
-            
             if ymax is not None:
                 ycrop1 = expected_y - ymax
                 ycrop2 = expected_y + ymax
@@ -235,7 +269,7 @@ class StripRegistrar:
             xshift = self.rsx - xpeak - 2
             if xshift>sx/2:
                 xshift = xshift - sx + 2
-            corr = np.max(nxcval)/self.rsx/self.rsy
+            corr = np.max(nxcval)/self.rsx/self.rsy/self.strip_width
             xshifts.append(xshift)
             yshifts.append(yshift)
             corrs.append(corr)
@@ -243,6 +277,21 @@ class StripRegistrar:
         if self.do_plots:
             plt.close()
 
+
+        cmax = np.max(corrs)
+        newcorrs = []
+        for corr in corrs:
+            if corr==-np.inf:
+                newcorrs.append(cmax)
+            else:
+                newcorrs.append(corr)
+        corrs = newcorrs
+
+        # for y1,y2,ys,xs,corr in zip(y1s,y2s,yshifts,xshifts,corrs):
+        #     print y1,y2,ys,xs,corr
+
+        # sys.exit()
+        
         return y1s,y2s,yshifts,xshifts,corrs
 
 if __name__=='__main__':

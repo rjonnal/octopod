@@ -7,6 +7,7 @@ import sys
 from glob import glob
 import sys,os
 import numpy as np
+import hashlib
 from matplotlib import pyplot as plt
 from scipy.ndimage import morphology
 from scipy.ndimage import filters
@@ -26,6 +27,27 @@ class Clock:
     def tock(self,label=''):
         print '%s: %0.5f'%(label,time()-self.t0)
 
+
+def scaleshow(im,dpi=50,clim=None):
+    if clim is None:
+        clim = (np.min(im),np.max(im))
+        
+    sy,sx = im.shape
+    iy = float(sy)/float(dpi)
+    ix = float(sx)/float(dpi)*1.25
+    plt.figure(figsize=(ix,iy))
+    plt.axes([0,0,.8,1])
+    plt.imshow(im,interpolation='none',cmap='gray',clim=clim)
+    plt.xticks([])
+    plt.yticks([])
+    plt.colorbar(fraction=.05,pad=.05)
+    plt.pause(.1)
+    return clim
+    
+def hash(self,input_string,max_val=2**32):
+    md5 = hashlib.md5()
+    md5.update(input_string)
+    return int(md5.hexdigest(),16)%max_val
 
 def polyfit2d(x, y, z, order=3):
     ncols = (order + 1)**2
