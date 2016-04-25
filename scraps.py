@@ -1,3 +1,46 @@
+########### Code from original StripRegistrar #########################################################
+
+            #nxcval = np.real(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(strip,s=(sy,sx))*np.conj(np.fft.fft2(self.ref)))))
+            #sf = np.fft.fftshift(np.fft.fft2(strip,s=(sy,sx)))
+            #rf = np.fft.fftshift(np.conj(np.fft.fft2(self.ref)))
+            #nxcval = np.fft.ifft2(sf*rf)
+            #nxcval1 = np.abs(nxcval)
+
+            # use built-in fft-based convolution, but have to flip ref horizontally and vertically for
+            # correlation
+            print yshift,xshift,corr
+            plt.cla()
+            plt.imshow(nxcval,interpolation='none',cmap='gray')
+            plt.pause(.1)
+            continue
+            # #nxcval = utils.background_subtract(nxcval,utils.strel(diameter=25))
+            # #nxcval = correlate2d(strip,ref)
+            
+
+            # peakVal = np.max(nxcval)
+            # peakIdx = np.where(nxcval==peakVal)
+
+            # yoff,xoff = peakIdx[0][0],peakIdx[1][0]
+
+
+            # print yoff,xoff
+            
+            # if nxcval.shape[0]%2:
+            #     yshift = (nxcval.shape[0]-1)/2.0 - yoff
+            # else:
+            #     yshift = nxcval.shape[0]/2.0 - yoff
+
+            # yshift = yshift%sy-y1
+            
+
+            # if nxcval.shape[1]%2:
+            #     xshift = (nxcval.shape[1]-1)/2.0 - xoff
+            # else:
+            #     xshift = nxcval.shape[1]/2.0 - xoff
+
+            #corrs.append(peakVal/ref.shape[1]/ref.shape[0]/self.strip_width)
+
+
 ########### Code from original Model.py in which median filtering was used to smooth the offset matrix
         # first make a 
         

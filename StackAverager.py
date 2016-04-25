@@ -25,8 +25,9 @@ class StackAverager:
         fim = np.fft.ifft2(np.fft.fftshift(np.fft.fft2(im)),s=newshape)
         aim = np.abs(fim)*factor**2
         return aim
+
         
-    def align_to(self,ref_idx=0,corr_threshold=0.67):
+    def align_to(self,ref_idx=0,corr_threshold=0.75):
         ref = self.vol[ref_idx,:,:]
         ref = self.scale(ref)
         key = '%03d'%ref_idx
