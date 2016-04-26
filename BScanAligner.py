@@ -5,15 +5,40 @@ logging.basicConfig(level='INFO')
 
 class BScanAligner:
 
-    def __init__(self,H5):
-        self.h5 = H5
+    def __init__(self,h5):
+        self.h5 = h5
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating BScanAligner object.')
 
-    def align_volumes(self,do_plot=False):
-        nVol = self.h5.get('processed_data').shape[0]
-        for iVol in range(nVol):
+    def align_volumes(self,do_plot=False,keep_intermediate=False):
+        nv,ns,nd,nf = self.h5.get('processed_data').shape
+        for iVol in range(nv):
             self.align_volume(iVol,do_plot=do_plot)
+
+        depths = []
+        for iVol in range(nv):
+            shape = self.h5['/axial_alignment/flattened_volume_%03d'%iVol].shape
+            depths.append(shape[1])
+
+        self.logger.info('Depths of flattened volumes: %s.'%(','.join(['%d'%d for d in depths])))
+        
+        new_nd = np.max(depths)
+        self.logger.info('Max depth: %d'%new_nd)
+        
+        flat_block = np.zeros((nv,ns,new_nd,nf),dtype=np.complex64)
+        self.logger.info('Creating %dx%dx%dx%d volume.'%(nv,ns,new_nd,nf))
+        
+        for iVol in range(nv):
+            flat_vol = self.h5['/axial_alignment/flattened_volume_%03d'%iVol][:]
+            self.logger.info('Shape of volume to insert: %s'%(','.join(['%d'%d for d in flat_vol.shape])))
+            dmax = flat_vol.shape[1]
+            self.logger.info('Inserting at %d,:,:%d,:.'%(iVol,dmax))
+            flat_block[iVol,:,:dmax,:] = flat_vol
+        self.h5.put('/flattened_data',flat_block)
+        if not keep_intermediate:
+            self.h5.delete('axial_alignment')
+            self.h5.repack()
+        
             
     def align_volume(self,iVol=0,do_plot=False):
         # this method returns a coarsely aligned volume
@@ -22,11 +47,11 @@ class BScanAligner:
         sv_key = '/axial_alignment/slow_vector_%03d'%iVol
         fv_key = '/axial_alignment/fast_vector_%03d'%iVol
         ff_key = '/axial_alignment/fast_flattened_volume_%03d'%iVol
-        sf_key = '/axial_alignment/slow_flattened_volume_%03d'%iVol
-        self.h5.delete(sv_key)
-        self.h5.delete(fv_key)
-        self.h5.delete(ff_key)
-        self.h5.delete(sf_key)
+        f_key = '/axial_alignment/flattened_volume_%03d'%iVol
+        #self.h5.delete(sv_key)
+        #self.h5.delete(fv_key)
+        #self.h5.delete(ff_key)
+        #self.h5.delete(f_key)
 
         try:
             zvec = self.h5.get(fv_key)[:]
@@ -126,7 +151,7 @@ class BScanAligner:
             self.h5.put(sv_key,zvec)
             
         try:
-            outvol2 = self.h5.get(sf_key)[:]
+            outvol2 = self.h5.get(f_key)[:]
         except Exception as e:
             self.logger.info('%s'%e)
             self.logger.info('z_align_rough: Assembling volume with flattened slow scans.')
@@ -138,7 +163,8 @@ class BScanAligner:
                 if k%20==0:
                     self.logger.info('z_align_rough: %d percent done'%(float(k)/float(ns)*100))
                 outvol2[k,zvec[k]:zvec[k]+nd,:] = outvol[k,:,:]
-            self.h5.put(sf_key,outvol2)
+            self.h5.put(f_key,outvol2)
+
 
         if do_plot:
             for k in range(3):
