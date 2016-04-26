@@ -149,6 +149,8 @@ class Cropper:
         except Exception as e:
             self.logger.info('Cannot crop processed_data: %s'%e)
             
+        self.h5.repack()
+            
     def autocrop(self,noise_border=200,do_plot=False):
 
         x_in = np.arange(noise_border)

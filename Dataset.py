@@ -25,6 +25,7 @@ class Dataset:
         raw_temp,raw_extension = os.path.splitext(self.raw_data_filename)
         self.h5fn = raw_temp + '.hdf5'
         self.xml_fn = raw_temp + '.xml'
+        self.h5 = H5(self.h5fn)
 
     def get_h5_handle(self):
         return self.h5
@@ -109,8 +110,6 @@ class Dataset:
 
             
     def initialize(self,system_label):
-
-        self.h5 = H5(self.h5fn)
 
         # write parameters from the XML file to the h5 file
         apf = AcquisitionParameterFile()

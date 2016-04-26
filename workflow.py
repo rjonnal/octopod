@@ -1,7 +1,9 @@
 from octopod import *
-print dir()
+import glob
 
 unp_fn_list = ['./oct_test_volume/oct_test_volume_2T.unp']
+
+2016.04.25
 
 # one loop for non-interactive, fully automated steps:
 for unp_fn in unp_fn_list:
