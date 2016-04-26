@@ -87,11 +87,11 @@ class Dataset:
         m.write_volume_labels()
 
 
-    def report(self):
+    def report(self,do_log=False):
         report_directory = self.h5.filename.replace('.hdf5','')+'_report'
         r = Reporter(self.h5,report_directory=report_directory)
         try:
-            r.processed_report()
+            r.processed_report(do_log=do_log)
         except Exception as e:
             self.logger.info('processed_report: Could not complete: %s'%e)
         try:

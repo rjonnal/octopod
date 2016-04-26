@@ -114,7 +114,7 @@ class Reporter:
         plt.savefig(outfn)
         plt.close()
 
-    def processed_report(self,show=True):
+    def processed_report(self,show=False,do_log=False):
         proc = np.abs(self.h5.get('processed_data')[:])
         n_volumes,n_slow,n_depth,n_fast = proc.shape
         for i_volume in range(n_volumes):
@@ -137,6 +137,21 @@ class Reporter:
                 plt.savefig(os.path.join(outdir,'%04d.png'%i_slow),dpi=dpi)
                 if show:
                     plt.pause(.0000001)
+
+            if do_log:
+                test_vol = np.log(vol[5:-5:5,:,5:-5:5])
+                cmin = np.median(test_vol)
+                cmax = np.percentile(test_vol,99.95) # saturate 0.05% of pixels
+
+
+                for i_slow in range(n_slow):
+                    plt.cla()
+                    plt.axes([0,0,1,1])
+                    plt.imshow(np.log(vol[i_slow,:,:]),cmap='gray',clim=(cmin,cmax),interpolation='none',aspect='auto')
+                    plt.savefig(os.path.join(outdir,'log_%04d.png'%i_slow),dpi=dpi)
+                    #if show:
+                    plt.pause(.0000001)
+                    
 
             plt.close()
             
