@@ -8,40 +8,41 @@ import scipy as sp
 from matplotlib import pyplot as plt
 import octopod_config as ocfg
 import logging,sys,os
-#from mayavi import mlab
+from mayavi import mlab
 from utils import autotrim_volume, autotrim_bscan
 import glob
 
 class Viewer3D:
 
-    def __init__(self,vol,depth=128):
+    def __init__(self,vol,zmin=None,zmax=None):
         self.logger = logging.getLogger(__name__)
         self.avol = vol
         prof = np.mean(np.mean(self.avol,axis=2),axis=0)
 
-        fig = plt.figure()
-        
-        global clicks,z1,z2
-        clicks = []
-        def onclick(event):
+        if zmin is None or zmax is None:
+            fig = plt.figure()
+
             global clicks,z1,z2
-            newclick = round(event.xdata)
-            clicks.append(newclick)
-            if len(clicks)>=2:
-                z1 = min(clicks[-2],clicks[-1])
-                z2 = max(clicks[-2],clicks[-1])
-                plt.cla()
-                plt.plot(prof)
-                plt.axvspan(z1,z2,alpha=0.3)
-                plt.draw()
-            
-        cid = fig.canvas.mpl_connect('button_press_event',onclick)
-        plt.plot(prof)
-        plt.show()
+            clicks = []
+            def onclick(event):
+                global clicks,z1,z2
+                newclick = round(event.xdata)
+                clicks.append(newclick)
+                if len(clicks)>=2:
+                    z1 = min(clicks[-2],clicks[-1])
+                    z2 = max(clicks[-2],clicks[-1])
+                    plt.cla()
+                    plt.plot(prof)
+                    plt.axvspan(z1,z2,alpha=0.3)
+                    plt.draw()
 
+            cid = fig.canvas.mpl_connect('button_press_event',onclick)
+            plt.plot(prof)
+            plt.show()
+            zmin = z1
+            zmax = z2
 
-        self.avol = self.avol[:,z1:z2,:]
-        #self.avol = autotrim_volume(self.avol,depth)
+        self.avol = self.avol[:,zmin:zmax,:]
         
         vmed = np.median(self.avol)
         vmean = np.mean(self.avol)
@@ -49,15 +50,14 @@ class Viewer3D:
         vmin = np.min(self.avol)
         vstd = np.std(self.avol)
         
-        
-        # plt.hist(np.ravel(self.avol),bins=100)
-        # plt.axvline(vmean+vstd,color='r')
-        # plt.axvline(vmean+2*vstd,color='r')
-        # plt.axvline(vmean+3*vstd,color='r')
-        # plt.axvline(vmean,color='g')
-        # plt.show()
         scatter_field = mlab.pipeline.scalar_field(self.avol)
-        mlab.pipeline.volume(scatter_field,vmin=vmean,vmax=vmed+3*vstd)
+        vmin,vmax = np.percentile(self.avol,[25,95])
+        mlab.pipeline.volume(scatter_field,vmin=vmin,vmax=vmax,color='gray')
+        # mlab.pipeline.iso_surface(scatter_field, contours=[vmax, ],)
+        # mlab.pipeline.image_plane_widget(scatter_field,
+        #                     plane_orientation='z_axes',
+        #                     slice_index=10)
+        
         mlab.show()
 
 class VolumeProjectionMaker:

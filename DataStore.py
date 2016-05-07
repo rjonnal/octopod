@@ -4,7 +4,7 @@ HDF5 to SQL, we could implement it quickly.
 '''
 
 import h5py
-import os
+import os,sys
 import shutil
 import logging
 logging.basicConfig(level='INFO')
@@ -99,7 +99,7 @@ class H5(DataStore):
     def repack(self):
         newh5fn = self.filename+'.repacked.hdf5'
         if os.path.exists(newh5fn):
-            sys.exit('repack: Please delete %s before calling H5.repack'%newh5fn)
+            self.move(newh5fn,newh5fn+'.garbage')
             
         newh5 = h5py.File(newh5fn)
         for key in self.h5.keys():

@@ -317,8 +317,8 @@ def gaussian_convolve(im,sigma,mode='same'):
     g = np.exp(-(XX**2+YY**2)/2.0/sigma**2)
     return fftconvolve(im,g,mode=mode)/np.sum(g)
 
-def dewarp(im,shifts=None,upsample_factor=5):
-    
+def dewarp(im,shifts=None,upsample_factor=5,shift_limit=5):
+
     sy,sx = im.shape
 
     if shifts is None:
@@ -330,7 +330,9 @@ def dewarp(im,shifts=None,upsample_factor=5):
             ftar = np.fft.fft(tar,n=int(round(sx*upsample_factor)))
             xc = np.abs(np.fft.fftshift(np.fft.ifft(fref*np.conj(ftar))))
             shift = np.argmax(xc)-sx/2*upsample_factor
-            if np.abs(shift)>5:
+            if len(ref)%2==1:
+                shift = shift - 1
+            if np.abs(shift)>shift_limit:
                 shift = 0.0
             shifts.append(shift)
 

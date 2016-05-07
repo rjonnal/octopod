@@ -20,3 +20,4 @@ from Series import *
 from Cropper import *
 from StackAverager import *
 from StripRegistrar import *
+from Cones import *

@@ -24,7 +24,7 @@ class Model:
     """A model of gross retinal reflectance, used for segmenting
     and labeling A-scans."""
 
-    def __init__(self,h5,debug=False):
+    def __init__(self,h5,data_block='processed_data',debug=False):
         """Initialize model. May pass an h5py.File object or .hdf5 filename.
         The file or object must contain a 'processed_data' dataset containing
         at least one volume."""
@@ -38,14 +38,15 @@ class Model:
             self.profile = self.h5.get('model/profile')[:]
         except Exception as e:
             self.logger.info('Model does not exist in h5 file.')
-            self.profile = self.make_model(debug=debug)
+            self.profile = self.make_model(data_block=data_block,debug=debug)
+        self.data_block = data_block
 
     def blur(self,bscan,kernel_width=5):
         return sp.signal.convolve2d(bscan,np.ones((1,kernel_width)),mode='same')/float(kernel_width)
         
-    def make_model(self,vidx=0,debug=False):
+    def make_model(self,data_block,vidx=0,debug=False):
         self.logger.info('Making model...')
-        avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
+        avol = np.abs(self.h5.get(data_block)[vidx,:,:,:])
         nSlow,nFast,nDepth = avol.shape
         
         if False:
@@ -198,7 +199,7 @@ class Model:
 
 
     def write_volume_labels(self,z_range=2,opening_strel=(1,15),goodness_threshold=0.25,use_fit=True):
-        nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
+        nvol,nslow,ndepth,nfast = self.h5.get(self.data_block).shape
         if use_fit:
             self.logger.info('write_volume_labels: using fit')
             soffset_matrix = np.round(self.h5.get('model/z_offset_fit')[:]).astype(np.float64)
@@ -223,7 +224,7 @@ class Model:
             projections[key] = np.zeros((nvol,nslow,nfast))
             
         for ivol in range(nvol):
-            avol = np.abs(self.h5.get('processed_data')[ivol,:,:,:])
+            avol = np.abs(self.h5.get(self.data_block)[ivol,:,:,:])
             self.logger.info('write_volume_labels: Labeling volume %d of %d.'%(ivol+1,nvol))
             self.logger.info('write_volume_labels: Labels: %s.'%','.join(label_keys))
 
@@ -247,23 +248,24 @@ class Model:
                 
     def write_axial_alignment(self):
         self.logger.info('write_axial_alignment: Starting.')
-        nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
+        nvol,nslow,ndepth,nfast = self.h5.get(self.data_block).shape
         offset_matrix = self.h5.make('model/z_offsets',(nvol,nslow,nfast),dtype='i2')
         goodness_matrix = self.h5.make('model/z_offset_goodness',(nvol,nslow,nfast),dtype='f8')
         fit_matrix = self.h5.make('model/z_offset_fit',(nvol,nslow,nfast),dtype='f8')
         om,gm,fm = self.align_volumes()
-        self.logger.info('write_axial_alignment: Writing axial offsets, goodness, and spline fit to data store.')
+        self.logger.info('write_axial_alignment: Writing axial offsets, goodness, and fit to data store.')
         offset_matrix[...] = om[...]
         goodness_matrix[...] = gm[...]
         fit_matrix[...] = fm[...]
         
     def align_volumes(self):
-        nvol,nslow,ndepth,nfast = self.h5.get('processed_data').shape
+        nvol,nslow,ndepth,nfast = self.h5.get(self.data_block).shape
         offset_matrix = np.zeros((nvol,nslow,nfast))
         goodness_matrix = np.zeros((nvol,nslow,nfast))
         fit_surface_matrix = np.zeros((nvol,nslow,nfast))
         
         for ivol in range(nvol):
+            self.logger.info('align_volumes: working on volume %d of %d.'%(ivol+1,nvol))
             offset,goodness,fit = self.align_volume(vidx=ivol)
             offset_matrix[ivol,:,:] = offset
             goodness_matrix[ivol,:,:] = goodness
@@ -274,7 +276,7 @@ class Model:
     def align_volume(self,vidx=0,rad=5):
         self.logger.info('align_volume: Starting')
         self.logger.info('align_volume: Getting volume from data store.')
-        avol = np.abs(self.h5.get('processed_data')[vidx,:,:,:])
+        avol = np.abs(self.h5.get(self.data_block)[vidx,:,:,:])
         avol = np.swapaxes(avol,0,1)
 
         self.logger.info('align_volume: Smoothing volume with smoothing kernel of size %d pixels.'%rad)
@@ -301,7 +303,6 @@ class Model:
             if islow%10==0:
                 self.logger.info('align_volume: Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
             for ifast in range(nfast):
-                #self.logger.info('A-scan %d.'%ifast)
                 test = avol[:,islow,ifast]
                 offset,goodness = translation1(profile,test,debug=False)
                 x.append(ifast)
@@ -416,7 +417,7 @@ class Model:
         # find peaks and troughs:
         gthresh = 1.0/smoothing
 
-        nslow = self.h5.h5['processed_data'].shape[1]
+        nslow = self.h5.h5[self.data_block].shape[1]
         
 
         peaks = np.sort(find_peaks(working_profile,gradient_threshold=gthresh))
@@ -465,7 +466,7 @@ class Model:
             
             plt.axes([l1,b2,hw,hh])
             plt.cla()
-            bscan = np.abs(self.h5.h5['processed_data'][0,bscanindex,:,:])
+            bscan = np.abs(self.h5.h5[self.data_block][0,bscanindex,:,:])
             #bscan = shear(bscan,1)
             try:
                 test = np.mean(bscan[:,-20:],axis=1)
