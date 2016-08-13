@@ -113,7 +113,7 @@ class DispersionOptimizer:
             
         return out
 
-    def optimize(self,test_frame=None,dry_run=False,do_plot=False,method='brute',n_lines=1000):
+    def optimize(self,test_frame=None,dry_run=False,do_plot=False,method='brute',n_lines=2000):
         if test_frame is None:
             test_frame = self.make_test_frame(n_lines)
             
@@ -122,8 +122,8 @@ class DispersionOptimizer:
         
         obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub,coarse_log,do_plot)
         c_sub0 = [0.0,0.0]
-        bounds3 = [c_sub0[0]-1e-17,c_sub0[0]+1e-17]
-        bounds2 = [c_sub0[1]-1e-11,c_sub0[1]+1e-11]
+        bounds3 = [c_sub0[0]-2e-17,c_sub0[0]+2e-17]
+        bounds2 = [c_sub0[1]-2e-11,c_sub0[1]+2e-11]
 
         
         step3 = (bounds3[1]-bounds3[0])/float(self.Ns)
