@@ -10,7 +10,8 @@ if stage==1:
     for unp_fn in unp_fn_list:
         # make a dataset and initialize it, specifying the system with which the data was collected
         ds = Dataset(unp_fn)
-        ds.initialize('hroct')
+        ds.initialize('2g_aooct')
+        #ds.initialize('hroct')
 
         # call the dispersion optimizer
         # this is equivalent to instantiating a DispersionOptimizer object and running

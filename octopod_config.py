@@ -31,9 +31,10 @@ source_spectra = {}
 # specifying the polynomial lambda = c_{k-1} x^{k-1} + c_{k-2} x^{k-2} + ... c_0,
 # where the polynomial maps pixel number (x) onto wavelength (lambda).
 # See numpy.polyval for identical interpretation of coefficient lists.
-source_spectra['hroct'] = [6.2e-11,801e-9]
-source_spectra['2g_aooct'] = [-6.79e-11,8.86e-7]
-source_spectra['2g_aooct'] = [-1.82e-15,-6.31e-11,8.83e-7]
+#source_spectra['hroct'] = [6.2e-11,801e-9]
+#source_spectra['2g_aooct'] = [-6.79e-11,8.86e-7]
+#source_spectra['2g_aooct'] = [-1.82e-15,-6.31e-11,8.83e-7]
+source_spectra['2g_aooct'] = [-6.79e-11,7.98e-7] # fast mode
 
 
 dc_cutoff = 50

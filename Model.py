@@ -304,7 +304,7 @@ class Model:
                 self.logger.info('align_volume: Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
             for ifast in range(nfast):
                 test = avol[:,islow,ifast]
-                offset,goodness = translation1(profile,test,debug=False)
+                offset,goodness = translation1(profile,test,debug=True)
                 x.append(ifast)
                 y.append(islow)
                 z.append(offset)
@@ -312,7 +312,13 @@ class Model:
             
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
-
+            plt.subplot(1,2,1)
+            plt.cla()
+            plt.imshow(offset_submatrix,interpolation='none')
+            plt.subplot(1,2,2)
+            plt.cla()
+            plt.imshow(goodness_submatrix,interpolation='none')
+            plt.pause(.1)
 
         fitting = True
         if fitting: # revisit this later; may be of use

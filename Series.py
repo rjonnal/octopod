@@ -45,7 +45,7 @@ class Series:
 
 if __name__=='__main__':
 
-    d = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.04.12_2/*.hdf5'
+    d = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.08.12/*.hdf5'
     flist = glob.glob(d)
     for f in flist:
         h5 = H5(f)
