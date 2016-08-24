@@ -12,7 +12,6 @@ from octopod.Misc import H5
 import octopod_config as ocfg
 import logging
 logging.basicConfig(level=logging.DEBUG)
-from octopod import Model
 
 class Cropper:
 

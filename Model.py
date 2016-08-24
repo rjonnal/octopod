@@ -259,17 +259,30 @@ class Model:
         fit_matrix[...] = fm[...]
         
     def align_volumes(self):
+
+        # first, we need to make some empty matrices of the right sizes,
+        # one layer for each volume, plus the lateral dimensions nslow and nfast
         nvol,nslow,ndepth,nfast = self.h5.get(self.data_block).shape
         offset_matrix = np.zeros((nvol,nslow,nfast))
         goodness_matrix = np.zeros((nvol,nslow,nfast))
         fit_surface_matrix = np.zeros((nvol,nslow,nfast))
-        
+
         for ivol in range(nvol):
             self.logger.info('align_volumes: working on volume %d of %d.'%(ivol+1,nvol))
             offset,goodness,fit = self.align_volume(vidx=ivol)
             offset_matrix[ivol,:,:] = offset
             goodness_matrix[ivol,:,:] = goodness
             fit_surface_matrix[ivol,:,:] = fit
+            plt.subplot(1,3,1)
+            plt.imshow(offset,interpolation='none',aspect='auto')
+            plt.colorbar()
+            plt.subplot(1,3,2)
+            plt.imshow(goodness,interpolation='none',aspect='auto')
+            plt.colorbar()
+            plt.subplot(1,3,3)
+            plt.imshow(fit,interpolation='none',aspect='auto')
+            plt.colorbar()
+            plt.show()
 
         return offset_matrix,goodness_matrix,fit_surface_matrix
         
@@ -304,7 +317,7 @@ class Model:
                 self.logger.info('align_volume: Aligning A-scans, volume %d is %d percent done.'%(vidx,pct_done))
             for ifast in range(nfast):
                 test = avol[:,islow,ifast]
-                offset,goodness = translation1(profile,test,debug=True)
+                offset,goodness = translation1(profile,test,debug=False)
                 x.append(ifast)
                 y.append(islow)
                 z.append(offset)
@@ -312,13 +325,6 @@ class Model:
             
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
-            plt.subplot(1,2,1)
-            plt.cla()
-            plt.imshow(offset_submatrix,interpolation='none')
-            plt.subplot(1,2,2)
-            plt.cla()
-            plt.imshow(goodness_submatrix,interpolation='none')
-            plt.pause(.1)
 
         fitting = True
         if fitting: # revisit this later; may be of use
@@ -349,7 +355,12 @@ class Model:
             #fit_surface = polyval2d(xx,yy,p)
     
             self.logger.info('Median filtering to create a smoothed offset surface.')
+
+
+            # This is a dumb way to fit. Use the goodness matrix, dummy, perhaps with 2D splines!
             fit_surface = median_filter(offset_submatrix,(3,21))
+
+            
     
             # print fit_surface
             # print fit_surface.shape
