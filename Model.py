@@ -301,14 +301,37 @@ class Model:
         offset_submatrix = np.ones((nslow,nfast))*gross_offset
         goodness_submatrix = np.ones((nslow,nfast))*gross_goodness
 
-        # reorder axes to nslow,nfast,ndepth
-        avol_sa = np.swapaxes(avol,0,2)
-        avol_sa = np.swapaxes(avol_sa,0,1)
+
+        # reorder axes to nslow,nfast,ndepth for broadcasting
+        avol_bc = np.transpose(avol,(1,2,0))
         
-        for k in range(100,rad,-5):
-            print np.mean(avol_sa,axis=2).shape
-            print offset_submatrix.shape
-            sys.exit()
+        def smooth(v,k):
+            # an interface to lateral_smooth_3d that handles the
+            # transposing to minimize confusion
+            return np.transpose(lateral_smooth_3d(np.transpose(avol_bc,(2,0,1)),k),(1,2,0))
+            
+        f0 = np.fft.fft(profile,axis=0)
+        
+        for k in range(200,rad,-50):
+            print k
+            smoothed_avol_bc = smooth(avol_bc,k)
+            f1 = np.fft.fft(smoothed_avol_bc,axis=2)
+            f1c = f1.conjugate()
+            num = f0*f1c
+            denom = np.abs(f0)*np.abs(f1)
+            frac = num/denom
+            ir = np.abs(np.fft.ifft(frac,axis=2))
+            goodness = np.max(ir,axis=2)
+            tx = np.argmax(ir,axis=2)
+            plt.figure(1)
+            plt.cla()
+            plt.imshow(goodness)
+            #plt.colorbar()
+            plt.figure(2)
+            plt.cla()
+            plt.imshow(tx)
+            #plt.colorbar()
+            plt.pause(.001)
 
         sys.exit()
     
