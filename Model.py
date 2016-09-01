@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import scipy as sp
 from scipy.ndimage.filters import generic_filter
-from scipy.interpolate import bisplrep,bisplev
+from scipy.interpolate import bisplrep,bisplev,interp2d
 from matplotlib import pyplot as plt
 from scipy.ndimage.morphology import grey_opening
 from scipy.ndimage.filters import median_filter
@@ -12,7 +12,7 @@ from octopod.Misc import H5
 import octopod_config as ocfg
 import logging
 logging.basicConfig(level=logging.DEBUG)
-
+import time
 
 if False:
     x = np.random.rand(100,100)
@@ -269,33 +269,64 @@ class Model:
 
         for ivol in range(nvol):
             self.logger.info('align_volumes: working on volume %d of %d.'%(ivol+1,nvol))
-            offset,goodness,fit = self.align_volume(vidx=ivol)
+            #offset,goodness,fit = self.align_volume(vidx=ivol)
+            offset,goodness,fit = self.align_volume_multiscale(vidx=ivol)
+
+            
             offset_matrix[ivol,:,:] = offset
             goodness_matrix[ivol,:,:] = goodness
             fit_surface_matrix[ivol,:,:] = fit
-            plt.subplot(1,3,1)
-            plt.imshow(offset,interpolation='none',aspect='auto')
-            plt.colorbar()
-            plt.subplot(1,3,2)
-            plt.imshow(goodness,interpolation='none',aspect='auto')
-            plt.colorbar()
-            plt.subplot(1,3,3)
-            plt.imshow(fit,interpolation='none',aspect='auto')
-            plt.colorbar()
-            plt.show()
 
         return offset_matrix,goodness_matrix,fit_surface_matrix
+
+
+    def align_volume_multiscale(self,vidx=0,rad=5):
+        self.logger.info('align_volume_multiscale: Starting')
+        self.logger.info('align_volume_multiscale: Getting volume from data store.')
+        avol = np.abs(self.h5.get(self.data_block)[vidx,:,:,:])
+        avol = np.swapaxes(avol,0,1)
+        avol = avol[:,:-2,:]
+
+        ndepth,nslow,nfast = avol.shape
+        profile = self.profile
+        if len(profile)>ndepth:
+            profile = profile[:ndepth]
+        if ndepth>len(profile):
+            avol = avol[:len(profile),:,:]
+            ndepth,nslow,nfast = avol.shape
+
+        gross_profile = np.mean(np.mean(avol,axis=2),axis=1)
+        gross_offset,gross_goodness = translation1(gross_profile,profile,debug=False)
         
+        offset_submatrix = np.ones((nslow,nfast))*gross_offset
+        goodness_submatrix = np.ones((nslow,nfast))*gross_goodness
+
+        # reorder axes to nslow,nfast,ndepth
+        avol_sa = np.swapaxes(avol,0,2)
+        avol_sa = np.swapaxes(avol_sa,0,1)
+        
+        for k in range(100,rad,-5):
+            print np.mean(avol_sa,axis=2).shape
+            print offset_submatrix.shape
+            sys.exit()
+
+        sys.exit()
+    
     def align_volume(self,vidx=0,rad=5):
         self.logger.info('align_volume: Starting')
         self.logger.info('align_volume: Getting volume from data store.')
         avol = np.abs(self.h5.get(self.data_block)[vidx,:,:,:])
         avol = np.swapaxes(avol,0,1)
 
+        
+
         self.logger.info('align_volume: Smoothing volume with smoothing kernel of size %d pixels.'%rad)
         if rad:
+            print time.time()
             avol = lateral_smooth_3d(avol,rad)
-        
+            print time.time()
+            sys.exit()
+            
         ndepth,nslow,nfast = avol.shape
         offset_submatrix = np.zeros((nslow,nfast))
         goodness_submatrix = np.zeros((nslow,nfast))
@@ -328,43 +359,79 @@ class Model:
 
         fitting = True
         if fitting: # revisit this later; may be of use
-            # ptile = 75
-            # goodness_threshold=np.percentile(w,ptile)
-            # self.logger.info('align_volume: Goodness %dth percentile %0.3f used as threshold.'%(ptile,goodness_threshold))
-            # valid = np.where(w>goodness_threshold)[0]
-            # self.logger.info('align_volume: Using %d of %d points (%d percent) for fit.'%(len(valid),len(w),float(len(valid))/float(len(w))*100))
-            # x = np.array(x)
-            # y = np.array(y)
-            # z = np.array(z)
-            # w = np.array(w)
+            ptile = 75
+            goodness_threshold=np.percentile(w,ptile)
+            self.logger.info('align_volume: Goodness %dth percentile %0.3f used as threshold.'%(ptile,goodness_threshold))
+            valid = np.where(w>goodness_threshold)[0]
+            x0 = x
+            y0 = y
+            self.logger.info('align_volume: Using %d of %d points (%d percent) for fit.'%(len(valid),len(w),float(len(valid))/float(len(w))*100))
+            x = np.array(x)
+            y = np.array(y)
+            z = np.array(z)
+            w = np.array(w)
 
-            # x = x[valid]
-            # y = y[valid]
-            # z = z[valid]
-            # w = w[valid]
-
-            #self.logger.info('Spline fitting surface to A-line axial positions.')
-            #tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
-            #self.logger.info('Evaluating spline function at A-line coordinates.')
-            #fit_surface = bisplev(np.arange(nslow),np.arange(nfast),tck)
-
-            #self.logger.info('Polynomial fitting surface to A-line axial positions.')
-            #p = polyfit2d(x,y,z,order=2)
-            #self.logger.info('Evaluating polynomial function at A-line coordinates.')
-            #xx,yy = np.meshgrid(np.arange(nfast),np.arange(nslow))
-            #fit_surface = polyval2d(xx,yy,p)
-    
-            self.logger.info('Median filtering to create a smoothed offset surface.')
+            x = x[valid]
+            y = y[valid]
+            z = z[valid]
+            w = w[valid]
 
 
+            mode='median_filter'
+            
+            if mode=='spline':
+                self.logger.info('Spline fitting surface to A-line axial positions.')
+                tck = bisplrep(x,y,z,w=w,xb=0,xe=nfast-1,yb=0,ye=nslow-1)
+                self.logger.info('Evaluating spline function at A-line coordinates.')
+                fit_surface = bisplev(np.arange(nslow),np.arange(nfast),tck)
+
+            if mode=='polyfit2d':
+                self.logger.info('Polynomial fitting surface to A-line axial positions.')
+                p = polyfit2d(x,y,z,order=2)
+                self.logger.info('Evaluating polynomial function at A-line coordinates.')
+                xx,yy = np.meshgrid(np.arange(nfast),np.arange(nslow))
+                fit_surface = polyval2d(xx,yy,p)
+
+            if mode=='median_filter':
             # This is a dumb way to fit. Use the goodness matrix, dummy, perhaps with 2D splines!
-            fit_surface = median_filter(offset_submatrix,(3,21))
+                self.logger.info('Median filtering to create a smoothed offset surface.')
+                slow_height = np.median(offset_submatrix,axis=1)
+                plt.figure()
+                plt.plot(slow_height)
+                plt.figure()
+                debias = (offset_submatrix.T-slow_height).T
+
+                
+                plt.figure()
+                plt.imshow(debias)
+                plt.colorbar()
+                
+                fit_surface_1 = median_filter(offset_submatrix,(3,3))
+                plt.figure()
+                plt.imshow(fit_surface_1)
+                plt.title('straight fit')
+                plt.colorbar()
+                
+                fit_surface_2 = (median_filter(debias,(3,3)).T+slow_height).T
+                plt.figure()
+                plt.imshow(fit_surface_2)
+                plt.title('debiased fit')
+                plt.colorbar()
+                plt.show()
+                sys.exit()
+
+            if mode=='interp2d':
+                self.logger.info('Using interp2d to create a smoothed offset surface.')
+                interpolation_function = interp2d(x,y,z)
+                fit_surface = interpolation_function(x0,y0)
+                print fit_surface
+                print fit_surface.shape
 
             
     
             # print fit_surface
             # print fit_surface.shape
-            if False:
+            if True:
                 clim = np.min(offset_submatrix),np.max(offset_submatrix)
                 plt.figure()
                 plt.imshow(offset_submatrix,interpolation='none',clim=clim)

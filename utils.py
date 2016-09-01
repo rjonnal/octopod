@@ -68,7 +68,7 @@ def polyval2d(x, y, m):
 
 
 def lateral_smooth_3d(volume,kernel_radius):
-    
+
     fvol1 = np.fft.fft2(volume,axes=(1,2))
     fvol2 = np.zeros(fvol1.shape,dtype='complex64')
     for k in range(fvol2.shape[0]):
