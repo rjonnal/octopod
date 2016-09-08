@@ -122,6 +122,22 @@ class H5(DataStore):
     def keys(self):
         return self.h5.keys()
 
+    def print_helper(self,thing,depth=0):
+        try:
+            print thing.keys()
+            for key in thing.keys():
+                try:
+                    print '\t'*depth,key,':',
+                    self.print_helper(thing[key],depth+1)
+                    print
+                except:
+                    pass
+        except:
+            print '(leaf)',thing.shape
+
+    def catalog(self):
+        self.print_helper(self.h5)
+
     def has(self,key):
         out = True
         try:

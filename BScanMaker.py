@@ -7,25 +7,17 @@ from scipy.interpolate import bisplrep,bisplev,interp2d
 from matplotlib import pyplot as plt
 from scipy.ndimage.morphology import grey_opening
 from scipy.ndimage.filters import median_filter
-from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d,polyfit2d,polyval2d
+from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d,polyfit2d,polyval2d,gaussian_convolve
 from octopod.Misc import H5
 import octopod_config as ocfg
 import logging
 logging.basicConfig(level=logging.DEBUG)
 import time
 
-if False:
-    x = np.random.rand(100,100)
-    a = x[5:,:]
-    b = x[:-5,:]
-    print translation(a,b)
+class BScanMaker:
 
-class Model:
-    """A model of gross retinal reflectance, used for segmenting
-    and labeling A-scans."""
-
-    def __init__(self,h5,data_block='processed_data',debug=False):
-        """Initialize model. May pass an h5py.File object or .hdf5 filename.
+    def __init__(self,h5,volume_index=0,factor=(1,1),data_block='processed_data',debug=False):
+        """Initialize bscan maker. May pass an h5py.File object or .hdf5 filename.
         The file or object must contain a 'processed_data' dataset containing
         at least one volume."""
         self.logger = logging.getLogger(__name__)
@@ -34,147 +26,139 @@ class Model:
             self.logger.info('Opening file %s.'%self.h5)
         else:
             self.h5 = h5
-        try:
-            self.profile = self.h5.get('model/profile')[:]
-        except Exception as e:
-            self.logger.info('Model does not exist in h5 file.')
-            self.profile = self.make_model(data_block=data_block,debug=debug)
-        self.data_block = data_block
+        self.volume = np.abs(self.h5[data_block][volume_index,:,:,:])
+        self.isos = self.h5['projections']['ISOS'][volume_index,:,:]
+        self.cost = self.h5['projections']['COST'][volume_index,:,:]
+        self.cones = (self.isos+self.cost)/2.0
 
+        # crop self.cones and self.volume
+        x,y = self.click_collector(self.cones,'Click upper left and lower right corners for cropping')
+        x1 = np.min(x)
+        x2 = np.max(x)
+        y1 = np.min(y)
+        y2 = np.max(y)
+
+        sy,sx = self.cones.shape
+        y1 = max(0,y1)
+        y2 = min(sy,y2)
+        x1 = max(0,x1)
+        x2 = min(sx,x2)
+        
+        self.isos = self.isos[y1:y2,x1:x2]
+        self.cost = self.cost[y1:y2,x1:x2]
+        self.cones = self.cones[y1:y2,x1:x2]
+        self.volume = self.volume[y1:y2,:,x1:x2]
+
+
+        # select region for B-projection
+        x,y = self.click_collector(self.cones,'Click top and bottom edges of region for B-scan')
+        x1 = np.min(x)
+        x2 = np.max(x)
+        y1 = np.min(y)
+        y2 = np.max(y)
+        sy,sx = self.cones.shape
+        y1 = max(0,y1)
+        y2 = min(sy,y2)
+
+        subvol = self.volume[y1:y2,:,:]
+
+        subvol_scaled = []
+        profs = []
+        for iy in range(subvol.shape[0]):
+            scaled = self.fftinterp(subvol[iy,:,:],factor)
+            subvol_scaled.append(scaled)
+            profs.append(np.mean(scaled,axis=1))
+
+
+        sy = len(profs[0])
+        
+        shifts = [0]
+        for prof in profs[1:]:
+            tx,g = translation1(profs[0],prof)
+            shifts.append(tx)
+
+        shifts = -np.array(shifts)
+        
+        shifts = shifts - np.min(shifts)
+        cropped_sy = sy - np.max(shifts)
+
+        aligned = []
+        
+        for im,x in zip(subvol_scaled,shifts):
+            im = im[x:x+cropped_sy,:]
+            aligned.append(im)
+
+        aligned = np.array(aligned)
+        
+        proj = np.mean(aligned,axis=0)
+
+        # fix vertical motion
+        
+        plt.imshow(proj,cmap='gray')
+        plt.show()
+        
+
+    def fftinterp(self,im,factor=[2,2]):
+        if len(factor)==1:
+            factor = [factor,factor]
+        if factor[0]==1 and factor[1]==1:
+            resized = im
+        else:
+            isy,isx = im.shape
+            yfactor = factor[0]
+            xfactor = factor[1]
+
+            osy,osx = int(round(isy*yfactor)),int(round(isx*xfactor))
+            while osy%2:
+                osy = osy+1
+            while osx%2:
+                osx = osx+1
+
+            #resized = np.real(np.fft.ifft2(np.fft.fftshift(np.fft.fft2(im)),s=(osy,osx)))
+
+            temp = np.fft.fftshift(np.fft.fft2(im))
+            resized = np.zeros((osy,osx),dtype='complex64')
+            y1 = (osy-isy)/2
+            y2 = y1+isy
+            x1 = (osx-isx)/2
+            x2 = x1+isx
+            resized[y1:y2,x1:x2] = temp
+            resized = np.fft.ifftshift(resized)
+            resized = np.fft.ifft2(resized)
+            resized = np.abs(resized)
+
+            #resized = np.real(np.fft.ifft2(np.fft.fft2(im),s=(osy,osx)))
+        return resized
+        
+        
+        
     def blur(self,bscan,kernel_width=5):
         return sp.signal.convolve2d(bscan,np.ones((1,kernel_width)),mode='same')/float(kernel_width)
         
-    def make_model(self,data_block,vidx=0,debug=False):
-        self.logger.info('Making model...')
-        avol = np.abs(self.h5.get(data_block)[vidx,:,:,:])
-        nSlow,nFast,nDepth = avol.shape
-        
-        if False:
-            # make a test volume with very clean translations.
-            avol = np.ones(avol.shape)
-            zpos = 100
-            rad = 3
-            zpos_vec = []
-            for iSlow in range(nSlow):
-                avol[iSlow,zpos-rad:zpos+rad,:] = avol[iSlow,zpos-rad:zpos+rad,:] + 100.0
-                zpos = np.abs(np.round(zpos + np.random.randn()))
-                zpos_vec.append(zpos)
-
-                
-        # crop to avoid edge effects in the registration:
-        if avol.shape[2]>10:
-            avol = avol[:,:,5:-5]
-
-        tx_vec = [0.0]
-        ty_vec = [0.0]
-        g_vec = [1.0]
-
-        template = None
-
-        # compute an intensity threshold for the first template image,
-        # to avoid using 
-
-        thresh = np.mean(avol)*.75
-
-        for iSlow in range(1,nSlow):
-            last = self.blur(avol[iSlow-1,:,:])
-
-            bright_enough = np.mean(last)>=thresh
-            
-            if debug:
-                self.logger.debug('Frame %d of %d. Sufficiently bright: %d'%(iSlow,nSlow-1,bright_enough))
-            
-            if template is None:
-                if bright_enough:
-                    template = last
-                    counter = np.ones(template.shape)
-                    sy,sx = template.shape
-                else:
-                    continue
-            
-            target = self.blur(avol[iSlow,:,:])
-            
-            if False:
-                plt.subplot(1,2,1)
-                plt.cla()
-                plt.imshow(template,interpolation='none',aspect='auto')
-                #plt.colorbar()
-                plt.subplot(1,2,2)
-                plt.cla()
-                plt.imshow(target,interpolation='none',aspect='auto')
-                #plt.colorbar()
-                plt.pause(.1)
-            
-            tx,ty,g = translation(target,template,debug=False)
-            if debug:
-                self.logger.debug('x:%d; y:%d; goodness:%0.3f'%(tx,ty,g))
-                
-            # ty is the amount to shift target to align with template
-            # let's say template's profile is [0 1 0 0] and target's is
-            # [0 0 1 0]. ty = -1 in this case.
-            if ty<0:
-                put0 = -ty
-                put1 = sy
-                get0 = 0
-                get1 = ty
-            elif ty>0:
-                put0 = 0
-                put1 = -ty
-                get0 = ty
-                get1 = sy
-            else:
-                get0 = 0
-                get1 = sy
-                put0 = 0
-                put1 = sy
-
-            template[put0:put1,:] = template[put0:put1,:] + target[get0:get1,:]
-            counter[put0:put1,:] = counter[put0:put1] + 1.0
-
-            if debug:
-                plt.cla()
-                plt.plot(np.mean(template/counter,axis=1))
-                plt.pause(.1)
-
-
-        template = template/counter
-        template = shear(template,2)
-
-        model_profile = np.mean(template,axis=1)
-        
-        self.write_profile(model_profile)
-        return model_profile
-
-    def write_profile(self,model_profile):
-        self.h5.require_group('model')
-        self.h5.put('model/profile',model_profile)
-
-    def click_crop(self):
-        global clicks
-        clicks = []
-        
-        fig = plt.figure(figsize=(10,6))
+    def click_collector(self,im,message=''):
+        global xclicks,yclicks
+        xclicks = []
+        yclicks = []
+        fig = plt.figure()
         
         def onclick(event):
             global clicks
-            newclick = round(event.xdata)
-            clicks.append(newclick)
-            plt.axvline(newclick)
+            xnewclick = round(event.xdata)
+            ynewclick = round(event.ydata)
+            xclicks.append(xnewclick)
+            yclicks.append(ynewclick)
+            plt.plot(xnewclick,ynewclick,'gs')
             plt.draw()
             
         cid = fig.canvas.mpl_connect('button_press_event',onclick)
         
-        plt.plot(self.profile)
+        plt.imshow(im,cmap='gray')
+        plt.autoscale(False)
+        
+        plt.title(message)
         plt.show()
 
-        if len(clicks)>=2:
-
-            z1 = np.min(clicks)
-            z2 = np.max(clicks)
-            self.profile[:z1] = 0.0
-            self.profile[z2+1:] = 0.0
-            self.write_profile(self.profile)
-            
+        return xclicks,yclicks
 
 
     def get_label_dict(self):
