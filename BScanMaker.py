@@ -13,45 +13,49 @@ import octopod_config as ocfg
 import logging
 logging.basicConfig(level=logging.DEBUG)
 import time
+import octopod_config as ocfg
 
 class BScanMaker:
 
-    def __init__(self,h5,volume_index=0,factor=(1,1),data_block='processed_data',debug=False):
-        """Initialize bscan maker. May pass an h5py.File object or .hdf5 filename.
-        The file or object must contain a 'processed_data' dataset containing
-        at least one volume."""
+    def __init__(self,h5,volume_index=0,factor=(1,1),data_block='processed_data',debug=False,outdir=',/.bsm_output'):
+
+        test = True
+        if test:
+            pass
+        
+        """Initialize bscan maker. Must pass a .hdf5 filename."""
         self.logger = logging.getLogger(__name__)
-        if type(h5)==str:
-            self.h5 = H5(h5)
-            self.logger.info('Opening file %s.'%self.h5)
-        else:
-            self.h5 = h5
+        self.h5 = H5(h5)
+        self.h5.catalog()
+        did = self.h5['IDs']['dataset_id'].value
+        self.tag = '%s_%d_%03d'%(os.path.split(h5)[1].replace('.hdf5',''),did,volume_index)
+        self.logger.info('Opening file %s.'%self.h5)
+
         self.volume = np.abs(self.h5[data_block][volume_index,:,:,:])
         self.isos = self.h5['projections']['ISOS'][volume_index,:,:]
         self.cost = self.h5['projections']['COST'][volume_index,:,:]
         self.cones = (self.isos+self.cost)/2.0
+        self.cones = gaussian_convolve(self.cones,0.5)
+        self.acdb = H5(ocfg.areal_cropping_database,'w')
+        self.acdb_key = self.tag
+        self.outdir = outdir
 
-        # crop self.cones and self.volume
-        x,y = self.click_collector(self.cones,'Click upper left and lower right corners for cropping')
-        x1 = np.min(x)
-        x2 = np.max(x)
-        y1 = np.min(y)
-        y2 = np.max(y)
-
-        sy,sx = self.cones.shape
-        y1 = max(0,y1)
-        y2 = min(sy,y2)
-        x1 = max(0,x1)
-        x2 = min(sx,x2)
+        if not os.path.exists(self.outdir):
+            os.mkdir(self.outdir)
         
-        self.isos = self.isos[y1:y2,x1:x2]
-        self.cost = self.cost[y1:y2,x1:x2]
-        self.cones = self.cones[y1:y2,x1:x2]
-        self.volume = self.volume[y1:y2,:,x1:x2]
+        self.areal_crop()
+        #self.depth_crop()
+        while True:
+            self.make_bscan(factor)
 
 
+    def make_bscan(self,factor):
         # select region for B-projection
         x,y = self.click_collector(self.cones,'Click top and bottom edges of region for B-scan')
+        if len(x)<2:
+            self.acdb.close()
+            sys.exit('Done!')
+            
         x1 = np.min(x)
         x2 = np.max(x)
         y1 = np.min(y)
@@ -64,8 +68,14 @@ class BScanMaker:
 
         subvol_scaled = []
         profs = []
+
+        newsy = factor[0]*subvol.shape[1]
+        newsx = factor[1]*subvol.shape[2]
+        
         for iy in range(subvol.shape[0]):
-            scaled = self.fftinterp(subvol[iy,:,:],factor)
+            #scaled = self.fftinterp(subvol[iy,:,:],factor)
+            #scaled = self.fftinterp2(subvol[iy,:,:],factor)
+            scaled = sp.misc.imresize(subvol[iy,:,:],(newsy,newsx))
             subvol_scaled.append(scaled)
             profs.append(np.mean(scaled,axis=1))
 
@@ -90,13 +100,117 @@ class BScanMaker:
 
         aligned = np.array(aligned)
         
-        proj = np.mean(aligned,axis=0)
+        bscan_linear = np.mean(aligned,axis=0)
+        bscan_log = np.log(bscan_linear)
 
-        # fix vertical motion
-        
-        plt.imshow(proj,cmap='gray')
+        cclims = np.percentile(self.cones[20:-20,20:-20],(1,99))
+        pclims = np.percentile(bscan_linear,(2,99.5))
+        plclims = np.percentile(bscan_log,(5,99.5))
+
+        bscan_tag = '%s_%03d_%03d'%(self.tag,y1,y2)
+
+        cones_fn = os.path.join(self.outdir,'%s_cones.png'%(self.tag))
+        self.savefig(cones_fn,self.cones,percentiles=(.5,99.9),hspan=None,scale_factor=3.0)
+
+        cones_fn = os.path.join(self.outdir,'%s_cones.png'%bscan_tag)
+        self.savefig(cones_fn,self.cones,percentiles=(.5,99.9),hspan=[y1,y2],scale_factor=3.0)
+
+        linear_fn = os.path.join(self.outdir,'%s_bscan_linear.png'%bscan_tag)
+        self.savefig(linear_fn,bscan_linear,percentiles=(2,99.9),scale_factor=3.0)
+        log_fn = os.path.join(self.outdir,'%s_bscan_log.png'%bscan_tag)
+        self.savefig(log_fn,bscan_log,percentiles=(3,99.75),scale_factor=3.0)
         plt.show()
+        plt.close('all')
+
+
+    def savefig(self,fn,im,percentiles=None,dpi=300.0,cmap='gray',hspan=None,scale_factor=1.0):
+
+        if not scale_factor==1.0:
+            sy,sx = im.shape
+            nsy,nsx = int(round(sy*scale_factor)),int(round(sx*scale_factor))
+            im = sp.misc.imresize(im,(nsy,nsx))
         
+        if percentiles is None:
+            clims = (np.min(im),np.max(im))
+        else:
+            clims = np.percentile(im,percentiles)
+            
+        sy,sx = im.shape
+        syi,sxi = float(sy)/float(dpi),float(sx)/float(dpi)
+        plt.figure(figsize=(sxi,syi))
+        plt.axes([0,0,1,1])
+        plt.imshow(im,clim=clims,cmap=cmap)
+        plt.xticks([])
+        plt.yticks([])
+        if hspan is not None:
+            plt.autoscale(False)
+            plt.axhspan(scale_factor*hspan[0],scale_factor*hspan[1],color='g',alpha=0.5)
+        plt.savefig(fn,dpi=dpi)
+        
+    def depth_crop(self):
+        # crop self.volume in depth
+        slow_proj = np.log(np.mean(self.volume,axis=2)).T
+        fast_proj = np.log(np.mean(self.volume,axis=0))
+        proj = np.hstack((slow_proj,fast_proj))
+        x,y = self.click_collector(proj,'Click top and bottom for cropping')
+        y1 = np.min(y)
+        y2 = np.max(y)
+
+        sy,sx = proj.shape
+        y1 = max(0,y1)
+        y2 = min(sy,y2)
+        self.volume = self.volume[:,y1:y2,:]
+
+    def areal_crop(self):
+        # crop self.cones and self.volume
+
+        try:
+            y1,y2,x1,x2 = self.acdb.get(self.acdb_key)[:]
+        except:
+            x,y = self.click_collector(self.cones,'Click upper left and lower right corners for cropping')
+            x1 = np.min(x)
+            x2 = np.max(x)
+            y1 = np.min(y)
+            y2 = np.max(y)
+
+            sy,sx = self.cones.shape
+            y1 = max(0,y1)
+            y2 = min(sy,y2)
+            x1 = max(0,x1)
+            x2 = min(sx,x2)
+            #self.acdb.put(self.acdb_key,np.array([y1,y2,x1,x2]))
+        
+        self.isos = self.isos[y1:y2,x1:x2]
+        self.cost = self.cost[y1:y2,x1:x2]
+        self.cones = self.cones[y1:y2,x1:x2]
+        self.volume = self.volume[y1:y2,:,x1:x2]
+
+    def fftinterp2(self,im,factor=[2,2]):
+        '''Interpolate a two-dimensional NumPy array by a given factor.
+        '''
+        yfactor,xfactor = factor
+        
+        reshape = lambda (y, x): [int(yfactor * y), int(xfactor * x)]
+        diff = lambda (y, x): [y - im.shape[0], x - im.shape[1]]
+        nexteven = lambda x: x if (x % 2 == 0) else x + 1
+
+        delta = map(nexteven, diff(reshape(im.shape)))
+        newsize = tuple(x[0] + x[1] for x in zip(im.shape, delta))
+        fim = np.fft.fft2(im)
+        fim = np.fft.fftshift(fim)
+
+        p,q = newsize
+        m,n = fim.shape
+        tb = (p-m)/2
+        lr = (q-n)/2
+
+        fpadded = np.zeros(newsize,dtype=np.complex64)
+        fpadded[tb:tb+m,lr:lr+n] = fim
+        fpadded = np.fft.ifftshift(fpadded)
+
+        padded = np.fft.ifft2(fpadded)
+        resized = np.real(padded)
+        return resized
 
     def fftinterp(self,im,factor=[2,2]):
         if len(factor)==1:

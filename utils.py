@@ -69,7 +69,7 @@ def polyval2d(x, y, m):
 
 def lateral_smooth_3d(volume,kernel_radius):
 
-    if kernel_radius<=1.0:
+    if kernel_radius<=1:
         out = volume
     else:
         fvol1 = np.fft.fft2(volume,axes=(1,2))

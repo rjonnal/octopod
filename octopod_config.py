@@ -42,6 +42,7 @@ dc_cutoff = 50
 model_database = '/home/rjonnal/data/Dropbox/Share/global_data/axial_model/database.hdf5'
 dispersion_database = '/home/rjonnal/Dropbox/Share/global_data/dispersion/database.hdf5'
 strip_database_folder = '/home/rjonnal/data/Dropbox/Share/global_data/strip_registration/'
+areal_cropping_database = '/home/rjonnal/data/Dropbox/Share/global_data/areal_cropping/database.hdf5'
 
 dispersion_3_max = 10.0
 dispersion_3_min = -10.0
