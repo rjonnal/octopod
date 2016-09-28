@@ -319,6 +319,127 @@ def gaussian_convolve(im,sigma,mode='same'):
     g = np.exp(-(XX**2+YY**2)/2.0/sigma**2)
     return fftconvolve(im,g,mode=mode)/np.sum(g)
 
+
+def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_strip=False):
+
+    sy,sx = target.shape
+    sy2,sx2 = reference.shape
+
+    assert sy==sy2 and sx==sx2
+
+    reference = np.abs(reference)
+    target = np.abs(target)
+
+    
+
+    # basic idea:
+    # 1. window the reference in order to constrain the fit to portions of the reference near the target
+    # 2. Window the target, usually with a very smal fwhm, in order to find a specific match in the reference
+    # 3. average the target and match the two
+    # 4. shift the window position on the target and go to step 2
+    # for the time being let's keep things simple by not offering any initial upsampling options, and istead
+    # upsample (or interpolate) the resulting traces by smoothing
+
+    for ix in range(sx):
+        x = np.arange(sx)-float(ix)
+        if not reference_width is None:
+            g = np.exp((-x**2)/(2*float(reference_width)**2))
+            g = g/np.max(g) # normalize by maximum value so that the most likely match has amplitude equal to strip
+            temp_ref = reference*g
+        else:
+            temp_ref = reference
+
+        temp_ref = (temp_ref - np.mean(temp_ref))/np.std(temp_ref)
+        target = (target - np.mean(target))/np.std(target)
+        
+        if collapse_strip:
+            # speed things up by doing a 2x1 cross-correlation
+            # better option is below, 2d correlation between two windowed images
+
+            f1 = np.fft.fft(temp_ref,axis=0)
+            f1c = f1.conjugate()
+            
+            g = np.exp((-x**2)/(2*float(strip_width)**2))
+            g = g/np.sum(g) # normalize so that the sum of the windowed target has the same amplitude as the whole target
+            line = np.sum(target*g,axis=1)
+
+            line = (line - np.mean(line))/np.std(line)
+
+            f0 = np.fft.fft(line)
+            num = (f0*f1c.T).T
+            denom = (np.abs(f0)*np.abs(f1).T).T
+
+            denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
+            frac = num/denom
+            ir = np.abs(np.fft.ifft(frac,axis=0))
+
+            goodness = np.max(ir)
+            peakcoords = np.where(ir==goodness)
+            peaky = peakcoords[0][0]
+            peakx = peakcoords[1][0]
+
+            if peaky > sy // 2:
+                peaky -= sy
+
+            peakx = ix-peakx
+
+        else:
+            f1 = np.fft.fft2(temp_ref)
+            f1c = f1.conjugate()
+
+            g = np.exp((-x**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
+            #g = g/np.sum(g) # normalize so that the sum of the windowed target has the same amplitude as the whole target
+            temp_tar = target*g
+
+            f0 = np.fft.fft2(temp_tar)
+            num = f0*f1c
+            denom = np.abs(f0)*np.abs(f1)
+
+            denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
+            frac = num/denom
+            ir = np.abs(np.fft.ifft2(frac))
+
+            goodness = np.max(ir)
+            peakcoords = np.where(ir==goodness)
+            peaky = peakcoords[0][0]
+            peakx = peakcoords[1][0]
+
+            if peaky > sy // 2:
+                peaky -= sy
+
+            if peakx > sx // 2:
+                peakx -= sx
+
+
+
+        return peaky,peakx,goodness
+
+ 
+        print peaky,peakx,goodness
+        y_peaks.append(peaky)
+        x_peaks.append(peakx)
+        goodnesses.append(goodness)
+        
+        
+
+
+        # sanity check to make sure things are scaled correctly
+        # single_line = target[:,ix]
+        # plt.plot(line)
+        # plt.plot(single_line)
+        # plt.show()
+
+        # def print_stats(arr):
+        #     print np.min(arr),np.mean(arr),np.max(arr)
+
+
+
+
+    
+
+    
+
+
 def dewarp(im,shifts=None,upsample_factor=5,shift_limit=5):
 
     sy,sx = im.shape
