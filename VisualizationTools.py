@@ -8,7 +8,7 @@ import scipy as sp
 from matplotlib import pyplot as plt
 import octopod_config as ocfg
 import logging,sys,os
-from mayavi import mlab
+#from mayavi import mlab
 from utils import autotrim_volume, autotrim_bscan
 import glob
 
