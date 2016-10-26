@@ -261,6 +261,9 @@ def find_peaks(prof,intensity_threshold=-np.inf,gradient_threshold=-np.inf):
 
     return peaks[valid]
 
+def sigmoid(t,a=1.0,b=1.0,c=1.0,d=0.0):
+    return float(a)/(1+float(b)*np.exp(-float(c)*(t-float(d))))
+
 def gaussian(x,x0,sigma):
     return np.exp(-(x-x0)**2/2.0/sigma**2)
 
@@ -308,7 +311,7 @@ def raps(im,N=1024,kind='linear'):
     interpolator = interp1d(freqr,imf,kind=kind)
     im_out = interpolator(freq_out)
     
-    return im_out
+    return im_out, freq_out
               
 def gaussian_convolve(im,sigma,mode='same'):
     
