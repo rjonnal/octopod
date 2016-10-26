@@ -323,8 +323,71 @@ def gaussian_convolve(im,sigma,mode='same'):
     return fftconvolve(im,g,mode=mode)/np.sum(g)
 
 
-def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_strip=False):
+def phase_diff(im1,im2):
+    return np.angle(im1-im2)
 
+def bulk_correct(im1,im2,fractional_threshold=0.9,smoothing_sigma=0.0):
+    # return a corrected version of im2
+    sy,sx = im1.shape
+    sy2,sx2 = im2.shape
+    assert sy==sy2 and sx==sx2
+
+    plt.figure()
+    plt.imshow(phase_diff(im1,im2))
+    plt.colorbar()
+
+    new_im2 = np.zeros(im2.shape,dtype=np.complex64)
+    
+    for k in range(sx):
+        print k,
+        l1 = im1[:,k]
+        l2 = im2[:,k]
+        al1 = np.abs(l1)
+        al2 = np.abs(l2)
+        test = (al1+al2)/2.0
+        if smoothing_sigma:
+            x = np.arange(sy)-sy/2.0
+            g = np.exp((-x**2)/(2*smoothing_sigma**2))
+            g = g/np.sum(g)
+            test = np.convolve(test,g,mode='same')
+            
+        thresh = np.percentile(test,fractional_threshold*100.0)
+        valid = np.where(test>thresh)[0]
+        valid = np.where(test>np.std(test))[0]
+
+        bulk_phase_difference = np.angle(l1[valid])-np.angle(l2[valid])
+
+        d_phase = np.median(bulk_phase_difference)
+        print d_phase
+        nbins = int(round(len(valid)/5.0))
+        h,bin_edges = np.histogram(bulk_phase_difference,nbins)
+        valid = np.where(h>0)[0]
+        bins = (bin_edges[:-1]+bin_edges[1:])/2.0
+
+        p = np.polyfit(bins[valid],np.log(h[valid]),2)
+        dense_x = np.linspace(-np.pi*2,np.pi*2,1024)
+        dense_fit = np.exp(np.polyval(p,dense_x))
+
+        d_phase = dense_x[np.argmax(dense_fit)]
+
+        l2A = np.abs(l2)
+        l2T = np.angle(l2)
+
+        new_l2 = l2A*np.exp(l2T*1j)+np.exp((l2T-d_phase)*1j)
+        new_im2[:,k] = new_l2
+
+    plt.figure()
+    plt.imshow(phase_diff(im1,new_im2))
+    plt.colorbar()
+    plt.show()
+    
+
+def map_rasters(target,reference,strip_width=1.0,reference_width=5.0,collapse_strip=False,fast_vertical=True,dy_max=3.0,dx_max=3.0,do_plot=False):
+
+    if not fast_vertical:
+        reference = reference.T
+        target = target.T
+    
     sy,sx = target.shape
     sy2,sx2 = reference.shape
 
@@ -333,8 +396,6 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_s
     reference = np.abs(reference)
     target = np.abs(target)
 
-    
-
     # basic idea:
     # 1. window the reference in order to constrain the fit to portions of the reference near the target
     # 2. Window the target, usually with a very smal fwhm, in order to find a specific match in the reference
@@ -342,6 +403,10 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_s
     # 4. shift the window position on the target and go to step 2
     # for the time being let's keep things simple by not offering any initial upsampling options, and istead
     # upsample (or interpolate) the resulting traces by smoothing
+
+    x_peaks = []
+    y_peaks = []
+    goodnesses = []
 
     for ix in range(sx):
         x = np.arange(sx)-float(ix)
@@ -353,18 +418,15 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_s
             temp_ref = reference
 
         temp_ref = (temp_ref - np.mean(temp_ref))/np.std(temp_ref)
-        target = (target - np.mean(target))/np.std(target)
+        temp_tar = (target - np.mean(target))/np.std(target)
         
         if collapse_strip:
             # speed things up by doing a 2x1 cross-correlation
             # better option is below, 2d correlation between two windowed images
 
-            f1 = np.fft.fft(temp_ref,axis=0)
-            f1c = f1.conjugate()
-            
             g = np.exp((-x**2)/(2*float(strip_width)**2))
             g = g/np.sum(g) # normalize so that the sum of the windowed target has the same amplitude as the whole target
-            line = np.sum(target*g,axis=1)
+            line = np.sum(temp_tar*g,axis=1)
 
             line = (line - np.mean(line))/np.std(line)
 
@@ -392,8 +454,11 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_s
 
             g = np.exp((-x**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
             #g = g/np.sum(g) # normalize so that the sum of the windowed target has the same amplitude as the whole target
-            temp_tar = target*g
+            g = g/np.max(g)
+            temp_tar = temp_tar*g
 
+            factor = float(sx)/np.sum(g)
+            
             f0 = np.fft.fft2(temp_tar)
             num = f0*f1c
             denom = np.abs(f0)*np.abs(f1)
@@ -403,6 +468,7 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_s
             ir = np.abs(np.fft.ifft2(frac))
 
             goodness = np.max(ir)
+            scaled_goodness = goodness*np.sqrt(factor) # i have no idea why this works because i'm an idiot
             peakcoords = np.where(ir==goodness)
             peaky = peakcoords[0][0]
             peakx = peakcoords[1][0]
@@ -414,15 +480,78 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=None,collapse_s
                 peakx -= sx
 
 
-
-        return peaky,peakx,goodness
-
- 
-        print peaky,peakx,goodness
         y_peaks.append(peaky)
         x_peaks.append(peakx)
-        goodnesses.append(goodness)
+        goodnesses.append(scaled_goodness)
+
+
+    if do_plot:
+        clims = np.percentile(np.hstack((target,reference)),(5,99))
+        plt.figure()
+        plt.imshow(target,interpolation='none',cmap='gray',aspect='auto',clim=clims)
+        plt.colorbar()
+        plt.title('target')
+        plt.figure()
+        plt.imshow(reference,interpolation='none',cmap='gray',aspect='auto',clim=clims)
+        plt.colorbar()
+        plt.title('reference')
+
+        plt.figure()
+        plt.subplot(3,1,1)
+        plt.plot(y_peaks)
+        plt.subplot(3,1,2)
+        plt.plot(x_peaks)
+        plt.subplot(3,1,3)
+        plt.plot(goodnesses)
         
+
+
+    if dx_max or dy_max:
+        # now, walk through x and y vectors and remove outliers
+        start = np.argmax(goodnesses)
+        x_fixed = np.zeros(len(x_peaks))
+        y_fixed = np.zeros(len(y_peaks))
+        x_fixed[start] = x_peaks[start]
+        y_fixed[start] = y_peaks[start]
+        for k in range(start,sx-1):
+            if np.abs(x_peaks[k+1]-x_fixed[k])<=dx_max:
+                x_fixed[k+1]=x_peaks[k+1]
+            else:
+                x_fixed[k+1]=x_fixed[k]
+            if np.abs(y_peaks[k+1]-y_fixed[k])<=dy_max:
+                y_fixed[k+1]=y_peaks[k+1]
+            else:
+                y_fixed[k+1]=y_fixed[k]
+        for k in range(start,1,-1):
+            if np.abs(x_peaks[k-1]-x_fixed[k])<=dx_max:
+                x_fixed[k-1]=x_peaks[k-1]
+            else:
+                x_fixed[k-1]=x_fixed[k]
+            if np.abs(y_peaks[k-1]-y_fixed[k])<=dy_max:
+                y_fixed[k-1]=y_peaks[k-1]
+            else:
+                y_fixed[k-1]=y_fixed[k]
+
+        if do_plot:
+            plt.figure()
+            plt.subplot(3,1,1)
+            plt.plot(y_peaks)
+            plt.title('fixed')
+            plt.subplot(3,1,2)
+            plt.plot(x_peaks)
+            plt.title('fixed')
+            plt.subplot(3,1,3)
+            plt.plot(goodnesses)
+
+
+    if do_plot:
+        plt.show()
+    
+
+    if fast_vertical:
+        return y_peaks,x_peaks,goodnesses
+    else:
+        return x_peaks,y_peaks,goodnesses
         
 
 
