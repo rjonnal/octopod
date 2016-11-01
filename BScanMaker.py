@@ -123,7 +123,7 @@ class BScanMaker:
         plt.close('all')
 
 
-    def savefig(self,fn,im,percentiles=None,dpi=300.0,cmap='gray',hspan=None,scale_factor=1.0):
+    def savefig(self,fn,im,percentiles=None,dpi=600.0,cmap='gray',hspan=None,scale_factor=1.0):
 
         if not scale_factor==1.0:
             sy,sx = im.shape

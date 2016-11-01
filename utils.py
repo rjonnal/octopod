@@ -864,6 +864,27 @@ def findPeaks2d(im,axis=2,vSlopeThreshold=0,hSlopeThreshold=0):
         sys.exit('findPeaks2d: bad value for axis parameter; use 0, 1, or 2.')
 
 
+def ascend(vec,start):
+    out = start
+
+    try:
+        while vec[out+1]>vec[out]:
+            out = out + 1
+    except Exception as e:
+        print e
+
+    try:
+        while vec[out-1]>vec[out]:
+            out = out - 1
+    except Exception as e:
+        print e
+
+    return out
+
+def descend(vec,start):
+    return ascend(-vec,start)
+    
+        
 def nxcorr1(vec1,vec2,doPlots=False):
     '''Returns shift,xc:
     shift is the number of pixels that vec2 must be
