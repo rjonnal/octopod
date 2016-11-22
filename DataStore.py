@@ -4,7 +4,7 @@ HDF5 to SQL, we could implement it quickly.
 '''
 
 import h5py
-import os
+import os,sys
 import shutil
 import logging
 logging.basicConfig(level='INFO')

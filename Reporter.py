@@ -114,7 +114,7 @@ class Reporter:
         plt.savefig(outfn)
         plt.close()
 
-    def processed_report(self,show=True):
+    def processed_report(self,show=False):
         proc = np.abs(self.h5.get('processed_data')[:])
         n_volumes,n_slow,n_depth,n_fast = proc.shape
         for i_volume in range(n_volumes):
@@ -150,8 +150,9 @@ class Reporter:
             offset_stack = self.h5.get('model/volume_labels/%s'%key)
             
             nv,ns,nf = proj_stack.shape
-            nfi = nf/dpi*6*1.25
-            nsi = ns/dpi*6
+            
+            nfi = float(nf)/float(dpi)*6.0*1.25
+            nsi = float(ns)/float(dpi)*6.0
             for iv in range(nv):
                 plt.figure(figsize=(nfi,nsi))
                 plt.axes([0,0,.8,1])
