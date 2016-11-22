@@ -1,4 +1,4 @@
-'''A thin wrapper for h5py, in order to abstract away from the latter's implementation details. This class is meant to
+'''A thin wrapper for py, in order to abstract away from the latter's implementation details. This class is meant to
 guard the bulk of the code from the data archiving implementation, such that if, for instance, we decided to switch from
 HDF5 to SQL, we could implement it quickly.
 '''
@@ -129,7 +129,7 @@ class H5(DataStore):
                 try:
                     print '\t'*depth,key,':',
                     self.print_helper(thing[key],depth+1)
-                    print
+                    #print
                 except:
                     pass
         except:

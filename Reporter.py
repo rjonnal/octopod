@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from octopod.DataStore import H5
 import os,sys
 from utils import get_z_sampling
