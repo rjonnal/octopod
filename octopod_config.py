@@ -3,18 +3,21 @@
 # dictionary, the key will be used to label data sets in
 # the processing steps.
 
-data_root = 'D:/Data/'
+data_root = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data'
 
 data_paths = {}
-data_paths['2g_aooct'] = 'D:/Data/'
+#data_paths['2g_aooct'] = 'D:/rjonnal/Dropbox/Share/2g_aooct_data/Data/'
+data_paths['2g_aooct'] = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data'
+#data_paths['hroct'] = '/home/rjonnal/data/Dropbox/Share/hroct_data/Data'
 
-db_file = 'D:/octopod.db'
+db_file = '/home/rjonnal/db/octopod.db'
 
 raw_data_extension = 'unp'
 h5_extension = 'hdf5'
 raw_bytes_per_pixel = 2
 
 source_spectra = {}
+
 
 # old approach, with explicit L0 and dL terms
 # source_spectra['hroct'] = {'L0':801e-9,'dL':6.2e-11}
@@ -28,14 +31,18 @@ source_spectra = {}
 # specifying the polynomial lambda = c_{k-1} x^{k-1} + c_{k-2} x^{k-2} + ... c_0,
 # where the polynomial maps pixel number (x) onto wavelength (lambda).
 # See numpy.polyval for identical interpretation of coefficient lists.
-source_spectra['hroct'] = [6.2e-11,801e-9]
-source_spectra['2g_aooct'] = [-6.79e-11,8.86e-7]
-source_spectra['2g_aooct'] = [-1.82e-15,-6.31e-11,8.83e-7]
+#source_spectra['hroct'] = [6.2e-11,801e-9]
+#source_spectra['2g_aooct'] = [-6.79e-11,8.86e-7]
+#source_spectra['2g_aooct'] = [-1.82e-15,-6.31e-11,8.83e-7]
+source_spectra['2g_aooct'] = [-6.79e-11,7.98e-7] # fast mode
 
 
 dc_cutoff = 50
-model_database = 'D:/Data_Share/Dropbox/Share/global_data/axial_model/database.hdf5'
-dispersion_database = 'D:/Data_Share/Dropbox/Share/global_data/dispersion/database.hdf5'
+
+model_database = '/home/rjonnal/data/Dropbox/Share/global_data/axial_model/database.hdf5'
+dispersion_database = '/home/rjonnal/Dropbox/Share/global_data/dispersion/database.hdf5'
+strip_database_folder = '/home/rjonnal/data/Dropbox/Share/global_data/strip_registration/'
+areal_cropping_database = '/home/rjonnal/data/Dropbox/Share/global_data/areal_cropping/database.hdf5'
 
 dispersion_3_max = 10.0
 dispersion_3_min = -10.0

@@ -3,13 +3,56 @@ import os,logging,sys
 logging.basicConfig(level='INFO')
 
 
-class BScanAligner:
+class ActivityDetector:
 
     def __init__(self,h5):
         self.h5 = h5
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Creating BScanAligner object.')
+        self.logger.info('Creating ActivityDetector object.')
+        self.n_vol = self.h5['config']['n_vol'].value
+        self.n_slow = self.h5['config']['n_slow'].value
+        self.n_fast = self.h5['config']['n_fast'].value
+        self.n_depth = self.h5['config']['n_depth'].value
 
+        
+    def project_series(self):
+        fast_project = []
+        depth_project = []
+
+        slow_project_started = False
+        for i_vol in range(self.n_vol):
+            print i_vol
+            for i_slow in range(self.n_slow):
+                b = self.h5['processed_data'][i_vol,i_slow,:,:]
+                ab = np.abs(b)
+                if not slow_project_started:
+                    slow_project = ab
+                    slow_project_started = True
+                    slow_count = 0
+                else:
+                    slow_project = slow_project + ab
+                    slow_count = slow_count + 1
+                
+
+                fast_project.append(np.mean(ab,axis=1))
+                depth_project.append(np.mean(ab,axis=0))
+                
+        fast_project = np.array(fast_project)
+        depth_project = np.array(depth_project)
+        slow_project = slow_project/float(slow_count)
+
+        plt.figure()
+        plt.imshow(depth_project,interpolation='none',aspect='auto')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(fast_project,interpolation='none',aspect='auto')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(slow_project,interpolation='none',aspect='auto')
+        plt.colorbar()
+        plt.show()
+        
+        
     def align_volumes(self,do_plot=False,keep_intermediate=False):
         nv,ns,nd,nf = self.h5.get('processed_data').shape
         for iVol in range(nv):

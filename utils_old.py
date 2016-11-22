@@ -261,9 +261,6 @@ def find_peaks(prof,intensity_threshold=-np.inf,gradient_threshold=-np.inf):
 
     return peaks[valid]
 
-def sigmoid(t,a=1.0,b=1.0,c=1.0,d=0.0):
-    return float(a)/(1+float(b)*np.exp(-float(c)*(t-float(d))))
-
 def gaussian(x,x0,sigma):
     return np.exp(-(x-x0)**2/2.0/sigma**2)
 
@@ -294,6 +291,8 @@ def power_spectrum(im):
 
 def raps(im,N=1024,kind='linear'):
     imf = power_spectrum(im)
+    plt.imshow(np.log(imf))
+    plt.show()
     sy,sx = imf.shape
     freqy,freqx = np.fft.fftfreq(sy),np.fft.fftfreq(sx)
     freqy,freqx = np.fft.fftshift(freqy),np.fft.fftshift(freqx)
@@ -311,7 +310,7 @@ def raps(im,N=1024,kind='linear'):
     interpolator = interp1d(freqr,imf,kind=kind)
     im_out = interpolator(freq_out)
     
-    return im_out, freq_out
+    return im_out,freq_out
               
 def gaussian_convolve(im,sigma,mode='same'):
     
@@ -864,27 +863,6 @@ def findPeaks2d(im,axis=2,vSlopeThreshold=0,hSlopeThreshold=0):
         sys.exit('findPeaks2d: bad value for axis parameter; use 0, 1, or 2.')
 
 
-def ascend(vec,start):
-    out = start
-
-    try:
-        while vec[out+1]>vec[out]:
-            out = out + 1
-    except Exception as e:
-        print e
-
-    try:
-        while vec[out-1]>vec[out]:
-            out = out - 1
-    except Exception as e:
-        print e
-
-    return out
-
-def descend(vec,start):
-    return ascend(-vec,start)
-    
-        
 def nxcorr1(vec1,vec2,doPlots=False):
     '''Returns shift,xc:
     shift is the number of pixels that vec2 must be

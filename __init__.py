@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 import sys,os
 import h5py
 
+from ActivityDetector import *
 from AcquisitionParameterFile import *
 from Dataset import *
 from DatabaseManager import *
@@ -20,3 +21,5 @@ from Series import *
 from Cropper import *
 from StackAverager import *
 from StripRegistrar import *
+from Cones import *
+from BScanMaker import *

@@ -21,11 +21,11 @@ class DataStore:
 
     '''
 
-    def __init__(self,filename):
+    def __init__(self,filename,mode='w'):
         self.filename = filename
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating %s object from %s.'%(self.__class__,filename))
-
+        self.mode = mode
 
     def __getitem__(self,key):
         return self.get(key)
@@ -82,8 +82,8 @@ class DataStore:
 
 class H5(DataStore):
     
-    def __init__(self,filename):
-        DataStore.__init__(self,filename)
+    def __init__(self,filename,mode='w'):
+        DataStore.__init__(self,filename,mode)
         self.h5 = h5py.File(filename)
         self.filename = filename
 
@@ -95,11 +95,13 @@ class H5(DataStore):
             self.logger.error(e)
             sys.exit(e)
 
-        
     def repack(self):
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot repack. Exiting.'%self.mode)
+            sys.exit()
         newh5fn = self.filename+'.repacked.hdf5'
         if os.path.exists(newh5fn):
-            sys.exit('repack: Please delete %s before calling H5.repack'%newh5fn)
+            self.move(newh5fn,newh5fn+'.garbage')
             
         newh5 = h5py.File(newh5fn)
         for key in self.h5.keys():
@@ -120,6 +122,22 @@ class H5(DataStore):
     def keys(self):
         return self.h5.keys()
 
+    def print_helper(self,thing,depth=0):
+        try:
+            print thing.keys()
+            for key in thing.keys():
+                try:
+                    print '\t'*depth,key,':',
+                    self.print_helper(thing[key],depth+1)
+                    print
+                except:
+                    pass
+        except:
+            print '(leaf)',thing.shape
+
+    def catalog(self):
+        self.print_helper(self.h5)
+
     def has(self,key):
         out = True
         try:
@@ -134,6 +152,10 @@ class H5(DataStore):
     #    return self.get(key)
 
     def put(self,location,data,short_descriptor=None):
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot put. Exiting.'%self.mode)
+            sys.exit()
+            
         try:
             del self.h5[location]
         except Exception as e:
@@ -145,6 +167,9 @@ class H5(DataStore):
 
 
     def require_group(self,location):
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot require group. Exiting.'%self.mode)
+            sys.exit()
         self.h5.require_group(location)
 
 
@@ -156,6 +181,10 @@ class H5(DataStore):
         #"<u1", "<u2", "<u4", "<u8", ">u1", ">u2", ">u4", ">u8",
         #"<f4", "<f8", ">f4", ">f8", "<c8", "<c16", ">c8", ">c16",
         #"|S1", "|S2", "|S33", "|V1", "|V2", "|V33"]
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot make. Exiting.'%self.mode)
+            sys.exit()
+            
         try:
             del self.h5[location]
         except Exception as e:
@@ -172,15 +201,24 @@ class H5(DataStore):
         self.h5.close()
     
     def write_descriptor(self,location,descriptor):
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot write descriptor. Exiting.'%self.mode)
+            sys.exit()
         if descriptor is not None:
             location = '%s_IS_%s'%(location,descriptor.replace(' ','_'))
             self.put(location,[1])
 
     def write_attribute(self,group,attr_key,attr_value):
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot write attribute. Exiting.'%self.mode)
+            sys.exit()
         self.h5.require_group(group)
         self.h5[group].attrs[attr_key] = attr_value
 
     def delete(self,key):
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot delete. Exiting.'%self.mode)
+            sys.exit()
         try:
             del self.h5[key]
         except Exception as e:
