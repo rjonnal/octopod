@@ -34,7 +34,14 @@ source_spectra = {}
 #source_spectra['hroct'] = [6.2e-11,801e-9]
 #source_spectra['2g_aooct'] = [-6.79e-11,8.86e-7]
 #source_spectra['2g_aooct'] = [-1.82e-15,-6.31e-11,8.83e-7]
-source_spectra['2g_aooct'] = [-6.79e-11,7.98e-7] # fast mode
+
+
+#### fast mode spectra:
+# not sure where this first fast mode came from
+#source_spectra['2g_aooct'] = [-6.79e-11,7.98e-7] # fast mode
+source_spectra['2g_aooct'] = [ -6.59868380e-11, 8.08231883e-07]
+source_spectra['2g_aooct'] = [ -1.48412304e-15, -6.48214461e-11, 8.08083508e-07]
+
 
 
 dc_cutoff = 50

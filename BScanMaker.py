@@ -36,6 +36,10 @@ class BScanMaker:
         self.cost = self.h5['projections']['COST'][volume_index,:,:]
         self.cones = (self.isos+self.cost)/2.0
         self.cones = gaussian_convolve(self.cones,0.5)
+
+        self.isos_display = (self.isos + self.cones)/2.0
+        self.cost_display = (self.cost + self.cones)/2.0
+        
         self.acdb = H5(ocfg.areal_cropping_database,'w')
         self.acdb_key = self.tag
         self.outdir = outdir
@@ -112,9 +116,19 @@ class BScanMaker:
         cones_fn = os.path.join(self.outdir,'%s_cones.png'%(self.tag))
         self.savefig(cones_fn,self.cones,percentiles=(.5,99.9),hspan=None,scale_factor=3.0)
 
+        isos_fn = os.path.join(self.outdir,'%s_isos.png'%(self.tag))
+        self.savefig(isos_fn,self.isos,percentiles=(.5,99.9),hspan=None,scale_factor=3.0)
+
+        cost_fn = os.path.join(self.outdir,'%s_cost.png'%(self.tag))
+        self.savefig(cost_fn,self.cost,percentiles=(.5,99.9),hspan=None,scale_factor=3.0)
+
         cones_fn = os.path.join(self.outdir,'%s_cones.png'%bscan_tag)
         self.savefig(cones_fn,self.cones,percentiles=(.5,99.9),hspan=[y1,y2],scale_factor=3.0)
 
+        
+
+
+        
         linear_fn = os.path.join(self.outdir,'%s_bscan_linear.png'%bscan_tag)
         self.savefig(linear_fn,bscan_linear,percentiles=(2,99.9),scale_factor=3.0)
         log_fn = os.path.join(self.outdir,'%s_bscan_log.png'%bscan_tag)
