@@ -20,6 +20,8 @@ def process(frame,k_in,k_out,dispersion_coefficients):
     test_frame = np.fft.fftshift(np.fft.fft(test_frame,axis=0),axes=0)
     n_depth = test_frame.shape[0]
     test_frame = test_frame[:n_depth/2,:]
+    #plt.imshow(np.abs(test_frame))
+    #plt.show()
     return test_frame
 
 
