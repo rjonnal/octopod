@@ -39,8 +39,11 @@ source_spectra = {}
 #### fast mode spectra:
 # not sure where this first fast mode came from
 #source_spectra['2g_aooct'] = [-6.79e-11,7.98e-7] # fast mode
+# the next two came from calibration with Ocean Optics source
+# use first order one initially since second order one more likely
+# to fit error in calibration procedure
 source_spectra['2g_aooct'] = [ -6.59868380e-11, 8.08231883e-07]
-source_spectra['2g_aooct'] = [ -1.48412304e-15, -6.48214461e-11, 8.08083508e-07]
+#source_spectra['2g_aooct'] = [ -1.48412304e-15, -6.48214461e-11, 8.08083508e-07]
 
 
 
