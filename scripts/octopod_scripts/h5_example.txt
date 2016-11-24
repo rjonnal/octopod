@@ -1,0 +1,48 @@
+[u'IDs', u'L', u'acquisition_date', u'config', u'dispersion', u'eccentricity', u'flattened_data', u'k_in', u'k_out', u'model', u'processed_data', u'raw_data', u'system_label']
+ IDs : [u'dataset_id', u'experiment_id', u'subject_id']
+	dataset_id : (leaf) ()
+	experiment_id : (leaf) ()
+	subject_id : (leaf) ()
+ L : (leaf) (736,)
+ acquisition_date : (leaf) ()
+ config : [u'dispersion_c2', u'dispersion_c3', u'n_bm_scans', u'n_depth', u'n_fast', u'n_slow', u'n_vol', u'time_stamp', u'x_offset_mv', u'x_scan_mv', u'y_offset_mv', u'y_scan_mv']
+	dispersion_c2 : (leaf) ()
+	dispersion_c3 : (leaf) ()
+	n_bm_scans : (leaf) ()
+	n_depth : (leaf) ()
+	n_fast : (leaf) ()
+	n_slow : (leaf) ()
+	n_vol : (leaf) ()
+	time_stamp : (leaf) ()
+	x_offset_mv : (leaf) ()
+	x_scan_mv : (leaf) ()
+	y_offset_mv : (leaf) ()
+	y_scan_mv : (leaf) ()
+ dispersion : [u'bounds2', u'bounds3', u'coefficients', u'logs', u'objective_value']
+	bounds2 : (leaf) (2,)
+	bounds3 : (leaf) (2,)
+	coefficients : (leaf) (4,)
+	logs : [u'coarse', u'fine']
+		coarse : (leaf) (442, 3)
+		fine : (leaf) (443, 3)
+	objective_value : (leaf) ()
+ eccentricity : [u'nasal_temporal', u'superior_and_nasal_are_negative', u'superior_inferior']
+	nasal_temporal : (leaf) ()
+	superior_and_nasal_are_negative : (leaf) (1,)
+	superior_inferior : (leaf) ()
+ flattened_data : (leaf) (12, 200, 137, 200)
+ k_in : (leaf) (736,)
+ k_out : (leaf) (736,)
+ model : [u'labels', u'profile', u'z_offset_fit', u'z_offset_goodness', u'z_offsets']
+	labels : [u'COST', u'ELM', u'ISOS', u'RPE']
+		COST : (leaf) ()
+		ELM : (leaf) ()
+		ISOS : (leaf) ()
+		RPE : (leaf) ()
+	profile : (leaf) (95,)
+	z_offset_fit : (leaf) (12, 200, 200)
+	z_offset_goodness : (leaf) (12, 200, 200)
+	z_offsets : (leaf) (12, 200, 200)
+ processed_data : (leaf) (12, 200, 95, 200)
+ raw_data : (leaf) (12, 200, 200, 736)
+ system_label : (leaf) ()

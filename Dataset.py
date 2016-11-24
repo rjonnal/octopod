@@ -68,6 +68,15 @@ class Dataset:
         do = DispersionOptimizer(self.h5)
         do.optimize(n_lines=n_lines)
 
+
+    def flip(self):
+        test = self.h5['processed_data'][0,0,:,:]
+        test = np.abs(test)
+        test = np.mean(test,axis=1)
+        plt.plot(test)
+        plt.show()
+        sys.exit()
+
     def crop(self):
         c = Cropper(self.h5)
         c.crop()

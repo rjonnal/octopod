@@ -7,10 +7,7 @@ import shutil
 from glob import glob
 import h5py
 
-
-directories_to_process = glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.11.21')
-
-local_path = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/'
+directories_to_process = glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.11.21_cones')
 
 files = []
 for dtp in directories_to_process:
@@ -19,22 +16,27 @@ for dtp in directories_to_process:
 
 system_label = '2g_aooct'
 
+
+du = DispersionUnifier(files)
+
+sys.exit()
 # unsupervised steps:
 for fn in files:
+    continue
     d = Dataset(fn)
     d.initialize(system_label)
     d.optimize_dispersion()
     d.process()
 
-sys.exit()
 # supervised steps:
-for fn in files:
+for fn in files[1:]:
     print fn
     d = Dataset(fn)
     d.crop()
     d.align()
     d.model()
 
+sys.exit()
 # unsupervised step:
 for src in files:
     d = Dataset(src)
