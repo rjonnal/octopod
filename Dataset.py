@@ -74,6 +74,21 @@ class Dataset:
         f = Flipper(self.h5)
         f.flip()
 
+    def show(self):
+        vols = self.h5.get('/processed_data')[:]
+        nv,ns,nd,nf = vols.shape
+        subvol = vols[0,:10,:,:]
+        test = np.mean(np.abs(subvol),axis=0)
+        plt.figure()
+        plt.subplot(1,3,1)
+        plt.imshow(test)
+        plt.subplot(1,3,2)
+        plt.imshow(np.log(test))
+        plt.subplot(1,3,3)
+        plt.plot(np.mean(test,axis=1))
+        plt.show()
+        
+
     def crop(self):
         c = Cropper(self.h5)
         c.crop()

@@ -34,8 +34,9 @@ for fn in files:
     
 # supervised steps:
 for fn in files:
-    continue
     d = Dataset(fn)
+    d.show()
+    continue
     #d.flip()
     d.crop()
     #d.align()
@@ -43,6 +44,7 @@ for fn in files:
     
 # unsupervised step:
 for src in files:
+    continue
     d = Dataset(src)
     d.label()
     continue

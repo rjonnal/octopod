@@ -7,7 +7,7 @@ from scipy.interpolate import bisplrep,bisplev,interp2d
 from matplotlib import pyplot as plt
 from scipy.ndimage.morphology import grey_opening
 from scipy.ndimage.filters import median_filter
-from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d,polyfit2d,polyval2d
+from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d,lateral_smooth_3d_loop,polyfit2d,polyval2d
 from octopod.Misc import H5
 import octopod_config as ocfg
 import logging
@@ -19,6 +19,116 @@ if False:
     a = x[5:,:]
     b = x[:-5,:]
     print translation(a,b)
+
+
+def align_volume_to_profile_multiscale(avol,profile):
+    # put depth first
+    # (but shouldn't it be last, for broadcasting?)
+    avol = np.swapaxes(avol,0,1)
+    avol = (avol-np.mean(avol,axis=0))/np.std(avol,axis=0)
+
+    ndepth,nslow,nfast = avol.shape
+    profile = (profile-np.mean(profile))/np.std(profile)
+    
+    if len(profile)>ndepth:
+        profile = profile[:ndepth]
+        print 'trimming profile to %d pixels'%ndepth
+    elif ndepth>len(profile):
+        avol = avol[:len(profile),:,:]
+        ndepth,nslow,nfast = avol.shape
+        print 'trimming volume to %d pixels'%ndepth
+    else:
+        print 'profile and volume match in depth'
+        
+        
+    gross_profile = np.mean(np.mean(avol,axis=2),axis=1)
+    gross_offset,gross_goodness = translation1(gross_profile,profile,debug=False)
+    
+    
+    offset_submatrix = np.ones((nslow,nfast))*gross_offset
+    goodness_submatrix = np.ones((nslow,nfast))*gross_goodness
+
+    def show_brightest_layer(v,mdepth=None):
+        if mdepth is None:
+            # assumes depth is first dimension
+            p = np.mean(np.mean(v,axis=2),axis=1)
+            mdepth = np.argmax(p)
+        layer = v[mdepth,:,:]
+        plt.figure()
+        plt.imshow(layer)
+        plt.colorbar()
+        return mdepth
+
+
+    # fft the model, for cross-correlation by broadcasting
+    f0 = np.fft.fft(profile,axis=0)
+
+    started = False
+    sz,sy,sx = avol.shape
+    initial_step = float(max(sy,sx))
+    final_exp = -np.log(1.49999/initial_step)
+    steps = np.round(100*np.exp(-np.linspace(0.0,final_exp,8)))
+
+    #steps = np.array([50,40,30,25,20,15,10,8,6,5,4,3,2,1])
+    print steps
+
+    # for testing use a recognizable image:
+    # avol = np.load('/home/rjonnal/code/octopod/kid_with_grenade_volume.npy')
+
+    show_volume = False
+    if show_volume:
+        clim = np.percentile(avol,(5,99))
+        for z in range(avol.shape[0]):
+            plt.cla()
+            plt.imshow(avol[z,:,:],clim=clim,cmap='gray')
+            plt.pause(.1)
+
+        for s in range(avol.shape[1]):
+            plt.cla()
+            plt.imshow(avol[:,s,:],clim=clim,cmap='gray')
+            plt.pause(.1)
+
+
+    for k in steps:
+        smoothed_avol = lateral_smooth_3d(avol,k)
+        #smoothed_avol_loop = lateral_smooth_3d_loop(avol,k,smoothed_avol)
+        # depth is still first dimension
+
+        md=show_brightest_layer(avol)
+        show_brightest_layer(smoothed_avol,md)
+        plt.show()
+
+    
+        
+        f1 = np.fft.fft(smoothed_avol,axis=0)
+        f1c = f1.conjugate()
+
+        # transpose depth to the final dimension:
+        f1_transposed = np.transpose(f1,(1,2,0))
+        f1c_transposed = np.transpose(f1c,(1,2,0))
+        num_transposed = f0*f1c_transposed
+        denom_transposed = np.abs(f0)*np.abs(f1_transposed)
+        frac_transposed = num_transposed/denom_transposed
+
+        # now transpose back:
+        frac = np.transpose(frac_transposed,(2,0,1))
+
+
+        ir = np.abs(np.fft.ifft(frac,axis=0))
+        print np.mean(ir),np.max(ir),np.min(ir)
+
+
+        goodness = np.max(ir,axis=0)
+        tx = np.argmax(ir,axis=0)
+
+
+
+
+
+
+
+    
+    sys.exit()
 
 class Model:
     """A model of gross retinal reflectance, used for segmenting
@@ -279,7 +389,7 @@ class Model:
 
         return offset_matrix,goodness_matrix,fit_surface_matrix
 
-
+    
     def align_volume_multiscale(self,vidx=0,rad=2,debug=True):
         self.logger.info('align_volume_multiscale: Starting')
         self.logger.info('align_volume_multiscale: Getting volume from data store.')

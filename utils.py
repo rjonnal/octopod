@@ -67,6 +67,44 @@ def polyval2d(x, y, m):
     return z
 
 
+def lateral_smooth_3d_loop(volume,kernel_radius,test=None):
+
+    if kernel_radius<=1:
+        out = volume
+    else:
+        out = np.zeros(volume.shape)
+        kernel = np.zeros(volume[0,:,:].shape)
+        sz,sy,sx = volume.shape
+        n = np.ceil(kernel_radius*2)
+        XX,YY = np.meshgrid(np.arange(sx),np.arange(sy))
+        XX = XX - sx/2.0
+        YY = YY - sy/2.0
+        d = np.sqrt(XX**2+YY**2)
+        kernel[np.where(d<=kernel_radius)] = 1.0
+        kernel = kernel/np.sum(kernel)
+        plt.imshow(kernel)
+        plt.show()
+        for z in range(out.shape[0]):
+            unsmoothed = volume[z,:,:]
+            smoothed = signal.convolve2d(unsmoothed,kernel,mode='same')
+            if not test is None:
+                plt.figure()
+                plt.subplot(1,3,1)
+                plt.imshow(test[z,:,:])
+                plt.colorbar()
+                plt.subplot(1,3,2)
+                plt.imshow(smoothed)
+                plt.colorbar()
+                plt.subplot(1,3,3)
+                plt.imshow(test[z,:,:]-smoothed)
+                plt.colorbar()
+                plt.show()
+            print np.mean(unsmoothed)
+            print np.mean(smoothed)
+            print
+    return out
+
+
 def lateral_smooth_3d(volume,kernel_radius):
 
     if kernel_radius<=1:
@@ -90,7 +128,7 @@ def lateral_smooth_3d(volume,kernel_radius):
         kernel = kernel/np.sum(kernel)
         fkernel = np.fft.fft2(kernel)
         fout = fvol*fkernel
-        out = np.abs(np.fft.ifft2(fout))
+        out = np.abs(np.fft.fftshift(np.fft.ifft2(fout)))
     return out
 
 
