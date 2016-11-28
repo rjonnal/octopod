@@ -269,8 +269,8 @@ class Model:
 
         for ivol in range(nvol):
             self.logger.info('align_volumes: working on volume %d of %d.'%(ivol+1,nvol))
-            #offset,goodness,fit = self.align_volume(vidx=ivol)
-            offset,goodness,fit = self.align_volume_multiscale(vidx=ivol)
+            offset,goodness,fit = self.align_volume(vidx=ivol)
+            #offset,goodness,fit = self.align_volume_multiscale(vidx=ivol)
 
             
             offset_matrix[ivol,:,:] = offset
@@ -472,10 +472,7 @@ class Model:
 
         self.logger.info('align_volume: Smoothing volume with smoothing kernel of size %d pixels.'%rad)
         if rad:
-            print time.time()
             avol = lateral_smooth_3d(avol,rad)
-            print time.time()
-            sys.exit()
             
         ndepth,nslow,nfast = avol.shape
         offset_submatrix = np.zeros((nslow,nfast))
@@ -507,7 +504,7 @@ class Model:
                 offset_submatrix[islow,ifast] = offset
                 goodness_submatrix[islow,ifast] = goodness
 
-        fitting = True
+        fitting = False
         if fitting: # revisit this later; may be of use
             ptile = 75
             goodness_threshold=np.percentile(w,ptile)

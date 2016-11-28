@@ -58,9 +58,10 @@ dispersion_3_max = 10.0
 dispersion_3_min = -10.0
 dispersion_3_multiplier = 1e-17
 dispersion_3_step_size = 1e-2
+
 dispersion_2_max = 10.0
 dispersion_2_min = -10.0
-dispersion_2_multiplier = 1e-11
+dispersion_2_multiplier = 1e-10
 dispersion_2_step_size = 1e-2
 
 x_mv_per_deg = 3168.

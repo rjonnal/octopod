@@ -78,7 +78,7 @@ class Cropper:
                 plt.axvline(click)
 
 
-        plt.title('Click crop points z1, z2 in order and close window to complete cropping (and flipping!).')
+        plt.title('Click crop points z1, z2 in order and close window to complete cropping.')
         plt.show()
 
         if len(clicks)==2:
@@ -90,12 +90,7 @@ class Cropper:
         z1 = clicks[0]
         z2 = clicks[1]
 
-        flip = z2<z1
-        
-        if flip:
-            self.profile = self.profile[z1:z2:-1]
-        else:
-            self.profile = self.profile[z1:z2]
+        self.profile = self.profile[z1:z2]
 
         def write(loc,val):
             self.logger.info('crop: Writing to %s'%loc)
@@ -107,56 +102,41 @@ class Cropper:
         try:
             # crop the model profile:
             model_profile = self.h5['/model/profile'][:]
-            if flip:
-                model_profile = model_profile[z1:z2:-1]
-            else:
-                model_profile = model_profile[z1:z2]
+            model_profile = model_profile[z1:z2]
             write('/model/profile',model_profile)
         except Exception as e:
             self.logger.info('Cannot crop model profile: %s'%e)
 
         try:
-            mlen = len(self.h5['/model/profile'][:])
             # fix the model labels:
             for key in self.h5['/model/labels/'].keys():
                 val = self.h5['/model']['labels'][key].value
                 val = val - z1
-                if flip:
-                    val = mlen - val
                 write('/model/labels/%s'%key,val)
         except Exception as e:
             self.logger.info('Cannot fix model labels: %s'%e)
 
         try:
-            mlen = len(self.h5['/model/profile'][:])
             # fix the 2D layer labels
             for key in self.h5['/model/volume_labels'].keys():
                 val = self.h5['/model']['volume_labels'][key][:]
                 val = val - z1
-                if flip:
-                    val = mlen - val
                 write('/model/volume_labels/%s'%key,val)
         except Exception as e:
             self.logger.info('Cannot fix volume labels: %s'%e)
 
         try:
-            mlen = len(self.h5['/model/profile'][:])
             # fix z-offsets (offset between model and processed data cube)
             val = self.h5['/model/z_offsets'][:]
             val = val - z1
-            if flip:
-                val = mlen - val
             write('/model/z_offsets',val)
         except Exception as e:
             self.logger.info('Cannot fix offsets: %s'%e)
 
         try:
-            mlen = len(self.h5['/model/profile'][:])
             # fix the offset fit (a smoothed version of z-offsets)
             val = self.h5['/model/z_offset_fit'][:]
             val = val - z1
-            if flip:
-                val = mlen - val
             write('/model/z_offset_fit',val)
         except Exception as e:
             self.logger.info('Cannot fix offset fit: %s'%e)
@@ -164,14 +144,15 @@ class Cropper:
         try:
             # last, but not least, crop the data
             val = self.h5['/processed_data'][:]
-            if flip:
-                val = val[:,:,z1:z2:-1,:]
-            else:
-                val = val[:,:,z1:z2,:]
+            val = val[:,:,z1:z2,:]
+            plt.figure()
+            plt.imshow(np.abs(val[0,0,:,:]))
+            plt.title('Ctrl-C to stop')
+            plt.show()
             write('/processed_data',val)
         except Exception as e:
             self.logger.info('Cannot crop processed_data: %s'%e)
-            
+
         self.h5.repack()
             
     def autocrop(self,noise_border=200,do_plot=False):

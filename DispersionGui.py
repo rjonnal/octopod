@@ -12,8 +12,9 @@ from time import time,sleep
 
 logging.basicConfig(level=logging.DEBUG)
 
-Z_CUTON = 700
-Z_CUTOFF = 1000
+dz = 10
+Z_CUTON = 200+dz
+Z_CUTOFF = 350+dz
 X_START = 2
 N_STEPS = 3
 
@@ -295,6 +296,7 @@ class Window(QtGui.QWidget):
             self.coef_3_max = self.dispersion_coefs[0]
             self.coef_2_min = self.dispersion_coefs[1]
             self.coef_2_max = self.dispersion_coefs[1]
+
             self.coef_3_text.setValue(self.dispersion_coefs[0]/self.coef_3_multiplier)
             self.coef_2_text.setValue(self.dispersion_coefs[1]/self.coef_2_multiplier)
             self.index_text.setValue(self.index)

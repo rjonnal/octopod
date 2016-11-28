@@ -7,7 +7,7 @@ import shutil
 from glob import glob
 import h5py
 
-directories_to_process = glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.11.21_cones')
+directories_to_process = glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.11.21_*')
 
 files = []
 for dtp in directories_to_process:
@@ -17,60 +17,37 @@ for dtp in directories_to_process:
 system_label = '2g_aooct'
 
 
-du = DispersionUnifier(files)
+for idx,f in enumerate(files):
+    print idx,f
 
-sys.exit()
 # unsupervised steps:
 for fn in files:
     continue
     d = Dataset(fn)
     d.initialize(system_label)
-    d.optimize_dispersion()
+    #d.optimize_dispersion()
+    # hfn = fn.replace('.unp','.hdf5')
+    # h5 = H5(hfn)
+    # r = Reporter(h5,hfn.replace('.hdf5','')+'_report')
+    # r.dispersion_report()
     d.process()
-
+    
 # supervised steps:
-for fn in files[1:]:
-    print fn
+for fn in files:
+    continue
     d = Dataset(fn)
+    #d.flip()
     d.crop()
-    d.align()
+    #d.align()
     d.model()
-
-sys.exit()
+    
 # unsupervised step:
 for src in files:
     d = Dataset(src)
     d.label()
-    old_path,fn = os.path.split(src)
-    new_path = old_path.replace(local_path,cloud_path)
-    hsrc = src.replace('.unp','')+'.hdf5'
-    junk,hfn = os.path.split(hsrc)
-    hdest = os.path.join(new_path,hfn)
-    xsrc = src.replace('.unp','')+'.xml'
-    junk,xfn = os.path.split(xsrc)
-    xdest = os.path.join(new_path,xfn)
-    print 'copying %s to %s'%(hsrc,hdest)
-    shutil.copyfile(hsrc,hdest)
-    print 'copying %s to %s'%(xsrc,xdest)
-    shutil.copyfile(xsrc,xdest)
-    print
-sys.exit()
-    
-sys.exit()
-for fn in files:
+    continue
     hfn = fn.replace('.unp','.hdf5')
     h5 = H5(hfn)
     r = Reporter(h5,hfn.replace('.hdf5','')+'_report')
-    r.processed_report()
-
-sys.exit()    
-for fn in files:
-    d = Dataset(fn)
-    d.label()
-    hfn = fn.replace('.unp','.hdf5')
-    h5 = H5(hfn)
-    r = Reporter(h5,hfn.replace('.hdf5','')+'_report')
-    r.processed_report()
-    r.dispersion_report()
     r.projections_report(dpi=300)
     

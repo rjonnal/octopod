@@ -19,6 +19,7 @@ from VisualizationTools import *
 from Reporter import *
 from Series import *
 from Cropper import *
+from Flipper import *
 from StackAverager import *
 from StripRegistrar import *
 from Cones import *

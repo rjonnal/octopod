@@ -14,6 +14,7 @@ from octopod.Cropper import Cropper
 from octopod.Model import Model
 from octopod.BScanAligner import BScanAligner
 from octopod.Reporter import Reporter
+from octopod.Flipper import Flipper
 
 class Dataset:
 
@@ -70,12 +71,8 @@ class Dataset:
 
 
     def flip(self):
-        test = self.h5['processed_data'][0,0,:,:]
-        test = np.abs(test)
-        test = np.mean(test,axis=1)
-        plt.plot(test)
-        plt.show()
-        sys.exit()
+        f = Flipper(self.h5)
+        f.flip()
 
     def crop(self):
         c = Cropper(self.h5)

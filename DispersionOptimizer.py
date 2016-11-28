@@ -16,7 +16,8 @@ class DispersionOptimizer:
             self.h5 = h5
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating DispersionOptimizer object.')
-        self.Ns = 21
+        #self.Ns = 21
+        self.Ns = 41
 
     def show_dispersion_results(self,N=None,save=False):
         if N is None:
@@ -62,7 +63,7 @@ class DispersionOptimizer:
         else:
             plt.show()
 
-    def make_test_frame(self,size=1000):
+    def make_test_frame(self,size=5000):
         self.logger.info('Generating a random test frame from raw data.')
         
         n_depth = self.h5.get('/config/n_depth')[()]
@@ -122,12 +123,13 @@ class DispersionOptimizer:
         
         obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub,coarse_log,do_plot)
         c_sub0 = [0.0,0.0]
-        bounds3 = [c_sub0[0]-3e-17,c_sub0[0]+3e-17]
-        bounds2 = [c_sub0[1]-3e-11,c_sub0[1]+3e-11]
-
+        
+        bounds3 = [c_sub0[0]-10e-16,c_sub0[0]+10e-16]
+        bounds2 = [c_sub0[1]-10e-10,c_sub0[1]+10e-10]
         
         step3 = (bounds3[1]-bounds3[0])/float(self.Ns)
         step2 = (bounds2[1]-bounds2[0])/float(self.Ns)
+        
         self.logger.info('Starting coarse optimization.')
         self.logger.info('Bounds (3rd order): %0.1e,%0.1e'%tuple(bounds3))
         self.logger.info('Bounds (2nd order): %0.1e,%0.1e'%tuple(bounds2))
@@ -138,6 +140,7 @@ class DispersionOptimizer:
         obj = lambda c_sub: self.dispersion_objective(test_frame,c_sub,fine_log,do_plot)
         bounds3a = (result[0]-step3,result[0]+step3)
         bounds2a = (result[1]-step2,result[1]+step2)
+        
         self.logger.info('Starting fine optimization.')
         self.logger.info('Bounds (3rd order): %0.1e,%0.1e'%tuple(bounds3a))
         self.logger.info('Bounds (2nd order): %0.1e,%0.1e'%tuple(bounds2a))
