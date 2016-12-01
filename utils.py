@@ -105,31 +105,34 @@ def lateral_smooth_3d_loop(volume,kernel_radius,test=None):
     return out
 
 
-def lateral_smooth_3d(volume,kernel_radius):
+def lateral_smooth_3d(volume,kernel_radius,ellipticity=1.0):
 
-    if kernel_radius<=1:
-        out = volume
-    else:
-        fvol1 = np.fft.fft2(volume,axes=(1,2))
-        fvol2 = np.zeros(fvol1.shape,dtype='complex64')
-        for k in range(fvol2.shape[0]):
-            fvol2[k,:,:] = np.fft.fft2(volume[k,:,:])
+    fvol1 = np.fft.fft2(volume,axes=(1,2))
+    fvol2 = np.zeros(fvol1.shape,dtype='complex64')
+    for k in range(fvol2.shape[0]):
+        fvol2[k,:,:] = np.fft.fft2(volume[k,:,:])
 
-        fvol = fvol2
+    fvol = fvol2
 
-        sz,sy,sx = fvol.shape
-        n = np.ceil(kernel_radius*2)
-        XX,YY = np.meshgrid(np.arange(sx),np.arange(sy))
-        XX = XX - sx/2.0
-        YY = YY - sy/2.0
-        d = np.sqrt(XX**2+YY**2)
-        kernel = np.zeros(d.shape)
-        kernel[np.where(d<=kernel_radius)] = 1.0
-        kernel = kernel/np.sum(kernel)
-        fkernel = np.fft.fft2(kernel)
-        fout = fvol*fkernel
-        out = np.abs(np.fft.fftshift(np.fft.ifft2(fout)))
-    return out
+    sz,sy,sx = fvol.shape
+    n = np.ceil(kernel_radius*2)
+    XX,YY = np.meshgrid(np.arange(sx),np.arange(sy))
+    XX = ellipticity*(XX - sx/2.0)
+    YY = (YY - sy/2.0)/ellipticity
+    d = np.sqrt(XX**2+YY**2)
+
+    kernel = np.zeros(d.shape)
+    kernel[np.where(d<=kernel_radius)] = 1.0
+    kernel = kernel/np.sum(kernel)
+    #plt.imshow(kernel)
+    #plt.title(np.sum(kernel))
+    #plt.show()
+    #sys.exit()
+    fkernel = np.fft.fft2(kernel)
+    fout = fvol*fkernel
+    out = np.abs(np.fft.fftshift(np.fft.ifft2(fout),axes=(1,2)))
+    #print '%0.3e,%0.3e'%(np.sum(volume),np.sum(out))
+    return out,kernel
 
 
 def get_z_sampling(lambda_1,lambda_2,n=1.38):

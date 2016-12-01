@@ -21,25 +21,37 @@ if False:
     print translation(a,b)
 
 
-def align_volume_to_profile_multiscale(avol,profile):
+def align_volume_to_profile_by_bscans(avol,profile):
+    print avol.shape
+    average_along_fast = np.mean(avol,axis=0)
+    plt.imshow(average_along_fast)
+    plt.show()
+    #sys.exit()
+    
+def align_volume_to_profile_multiscale(avol,profile,debug=True):
     # put depth first
-    # (but shouldn't it be last, for broadcasting?)
     avol = np.swapaxes(avol,0,1)
-    avol = (avol-np.mean(avol,axis=0))/np.std(avol,axis=0)
 
+    # for testing use a recognizable image:
+    #avol = np.load('/home/rjonnal/code/octopod/kid_with_grenade_volume.npy')
+    
     ndepth,nslow,nfast = avol.shape
     profile = (profile-np.mean(profile))/np.std(profile)
-    
+
     if len(profile)>ndepth:
-        profile = profile[:ndepth]
-        print 'trimming profile to %d pixels'%ndepth
+        print 'growing volume to to %d pixels'%len(profile)
+        new_avol = np.ones((len(profile),nslow,nfast))*np.mean(avol)
+        new_avol[:ndepth,:,:] = avol
+        avol = new_avol
     elif ndepth>len(profile):
-        avol = avol[:len(profile),:,:]
-        ndepth,nslow,nfast = avol.shape
-        print 'trimming volume to %d pixels'%ndepth
+        print 'growing profile ot %d pixels'%ndepth
+        new_profile = np.ones(ndepth)*np.mean(profile)
+        new_profile[:len(profile)] = profile
+        profile = new_profile
     else:
         print 'profile and volume match in depth'
-        
+
+    plen = len(profile)
         
     gross_profile = np.mean(np.mean(avol,axis=2),axis=1)
     gross_offset,gross_goodness = translation1(gross_profile,profile,debug=False)
@@ -48,17 +60,37 @@ def align_volume_to_profile_multiscale(avol,profile):
     offset_submatrix = np.ones((nslow,nfast))*gross_offset
     goodness_submatrix = np.ones((nslow,nfast))*gross_goodness
 
-    def show_brightest_layer(v,mdepth=None):
+    def show_brightest_layer(v,mdepth=None,tstring=''):
         if mdepth is None:
             # assumes depth is first dimension
             p = np.mean(np.mean(v,axis=2),axis=1)
             mdepth = np.argmax(p)
+        print 'showing layer %d'%mdepth
         layer = v[mdepth,:,:]
         plt.figure()
         plt.imshow(layer)
+        plt.title(tstring)
         plt.colorbar()
         return mdepth
 
+    def show_four(v,tstring='',other=None):
+        plt.figure()
+        p = np.mean(np.mean(v,axis=2),axis=1)
+        idx = np.argsort(p)[::-1]
+        if other is not None:
+            extrapanel = 1
+        else:
+            extrapanel = 0
+        for k in range(4):
+            depth = idx[k]
+            plt.subplot(1,4+extrapanel,k+1)
+            plt.imshow(v[depth,:,:],cmap='gray')
+            plt.colorbar()
+            plt.title(depth)
+        if extrapanel:
+            plt.subplot(1,5,5)
+            plt.imshow(other)
+            plt.colorbar()
 
     # fft the model, for cross-correlation by broadcasting
     f0 = np.fft.fft(profile,axis=0)
@@ -66,39 +98,32 @@ def align_volume_to_profile_multiscale(avol,profile):
     started = False
     sz,sy,sx = avol.shape
     initial_step = float(max(sy,sx))
-    final_exp = -np.log(1.49999/initial_step)
-    steps = np.round(100*np.exp(-np.linspace(0.0,final_exp,8)))
-
+    #final_exp = -np.log(1.49999/initial_step)
+    #steps = np.round(100*np.exp(-np.linspace(0.0,final_exp,8)))
     #steps = np.array([50,40,30,25,20,15,10,8,6,5,4,3,2,1])
+    n_steps = 5
+    step_steepness = 5.0
+    steps = np.linspace(initial_step**(1.0/step_steepness),0.8,n_steps)**step_steepness/2.0
+    ellipticities = np.linspace(1.0,0.5**.25,n_steps)**4
+
     print steps
+#    show_volume = True
+#    if show_volume:
+#        for s in range(avol.shape[1]):
+#            plt.cla()
+#            plt.imshow(avol[:,s,:],clim=clim,cmap='gray')
+#            plt.pause(.001)
 
-    # for testing use a recognizable image:
-    # avol = np.load('/home/rjonnal/code/octopod/kid_with_grenade_volume.npy')
-
-    show_volume = False
-    if show_volume:
-        clim = np.percentile(avol,(5,99))
-        for z in range(avol.shape[0]):
-            plt.cla()
-            plt.imshow(avol[z,:,:],clim=clim,cmap='gray')
-            plt.pause(.1)
-
-        for s in range(avol.shape[1]):
-            plt.cla()
-            plt.imshow(avol[:,s,:],clim=clim,cmap='gray')
-            plt.pause(.1)
-
-
-    for k in steps:
-        smoothed_avol = lateral_smooth_3d(avol,k)
-        #smoothed_avol_loop = lateral_smooth_3d_loop(avol,k,smoothed_avol)
+    for rad,ellip in zip(steps,ellipticities):
+        smoothed_avol,kernel = lateral_smooth_3d(avol,rad,ellipticity=0.8)
         # depth is still first dimension
 
-        md=show_brightest_layer(avol)
-        show_brightest_layer(smoothed_avol,md)
-        plt.show()
-
-    
+        #show_four(avol,other=kernel)
+        #show_four(smoothed_avol,other=kernel)
+        #plt.show()
+        
+        smoothed_avol = (smoothed_avol-np.mean(smoothed_avol,axis=0))/np.std(smoothed_avol,axis=0)
+        #show_brightest_layer(smoothed_avol)
         
         f1 = np.fft.fft(smoothed_avol,axis=0)
         f1c = f1.conjugate()
@@ -107,7 +132,11 @@ def align_volume_to_profile_multiscale(avol,profile):
         f1_transposed = np.transpose(f1,(1,2,0))
         f1c_transposed = np.transpose(f1c,(1,2,0))
         num_transposed = f0*f1c_transposed
+        
         denom_transposed = np.abs(f0)*np.abs(f1_transposed)
+
+        denom_transposed[np.where(denom_transposed==0)]=1.0
+        
         frac_transposed = num_transposed/denom_transposed
 
         # now transpose back:
@@ -115,21 +144,68 @@ def align_volume_to_profile_multiscale(avol,profile):
 
 
         ir = np.abs(np.fft.ifft(frac,axis=0))
-        print np.mean(ir),np.max(ir),np.min(ir)
-
 
         goodness = np.max(ir,axis=0)
         tx = np.argmax(ir,axis=0)
+        tx[np.where(tx>plen//2)] = tx[np.where(tx>plen//2)] - plen
+        
+        #if tx > shape // 2:
+        #    tx -= shape
+
+        if not started:
+            #goodness_final = goodness.copy()
+            #tx_final = tx.copy()
+            goodness_final = np.zeros(goodness.shape)
+            tx_final = np.zeros(tx.shape)
+
+            goodness_final[...] = goodness[...]
+            tx_final[...] = tx[...]
+
+            started = True
+            better_goodness_mask = np.zeros(goodness.shape)
+            small_shifts_mask = np.zeros(tx.shape)
+        else:
+            better_goodness = (goodness-goodness_final)>0.0
+            shift_limit = 10
+            small_shifts = np.abs(tx-tx_final)<shift_limit
+
+            better_goodness_mask = np.zeros(goodness.shape)
+            better_goodness_mask[np.where(better_goodness)] = 1.0
+            small_shifts_mask = np.zeros(tx.shape)
+            small_shifts_mask[np.where(small_shifts)] = 1.0
 
 
+        refinements = better_goodness_mask*small_shifts_mask
+        refined_idx = np.where(refinements)
+        goodness_final[refined_idx] = goodness[refined_idx]
+        tx_final[refined_idx] = tx[refined_idx]
 
+        if debug:
+            plt.subplot(1,2,1)
+            plt.cla()
+            plt.plot(np.mean(np.mean(smoothed_avol,axis=2),axis=1))
+            plt.plot(profile)
+            plt.title(rad)
+            plt.subplot(1,2,2)
+            plt.cla()
+            plt.imshow(tx_final)
+            plt.title('%d,%d'%(tx_final.min(),tx_final.max()))
+            plt.pause(1)
 
+    if debug:
+        plt.subplot(1,2,1)
+        plt.cla()
+        plt.plot(np.mean(np.mean(smoothed_avol,axis=2),axis=1))
+        plt.plot(profile)
+        plt.subplot(1,2,2)
+        plt.cla()
+        plt.imshow(tx_final)
+        plt.title('final %d,%d'%(tx_final.min(),tx_final.max()))
+        plt.pause(1)
 
-
+    return tx_final,goodness_final
 
     
-    sys.exit()
-
 class Model:
     """A model of gross retinal reflectance, used for segmenting
     and labeling A-scans."""
@@ -148,7 +224,8 @@ class Model:
             self.profile = self.h5.get('model/profile')[:]
         except Exception as e:
             self.logger.info('Model does not exist in h5 file.')
-            self.profile = self.make_model(data_block=data_block,debug=debug)
+            sys.exit()
+            #self.profile = self.make_model(data_block=data_block,debug=debug)
         self.data_block = data_block
 
     def blur(self,bscan,kernel_width=5):
@@ -308,6 +385,7 @@ class Model:
         plt.ylim([np.min(self.profile),np.max(self.profile)*1.1])
 
 
+
     def write_volume_labels(self,z_range=2,opening_strel=(1,15),goodness_threshold=0.25,use_fit=True):
         nvol,nslow,ndepth,nfast = self.h5.get(self.data_block).shape
         if use_fit:
@@ -379,8 +457,8 @@ class Model:
 
         for ivol in range(nvol):
             self.logger.info('align_volumes: working on volume %d of %d.'%(ivol+1,nvol))
-            offset,goodness,fit = self.align_volume(vidx=ivol)
-            #offset,goodness,fit = self.align_volume_multiscale(vidx=ivol)
+            #offset,goodness,fit = self.align_volume(vidx=ivol)
+            offset,goodness,fit = self.align_volume_multiscale(vidx=ivol)
 
             
             offset_matrix[ivol,:,:] = offset
@@ -394,183 +472,8 @@ class Model:
         self.logger.info('align_volume_multiscale: Starting')
         self.logger.info('align_volume_multiscale: Getting volume from data store.')
         avol = np.abs(self.h5.get(self.data_block)[vidx,:,:,:])
-        avol = np.swapaxes(avol,0,1)
-
-
-        avol = (avol-np.mean(avol,axis=0))/np.std(avol,axis=0)
-        
-
-        # NOTE TO SELF: DON'T FUCKING FORGET TO REMOVE THIS, YOU FUCKING IDIOT
-        # IF YOU DO, IT WILL RUIN YOUR LIFE FOR A MONTH WHILE YOU DEBUG IT
-        # NOTE TO SELF: DON'T FUCKING FORGET TO REMOVE THIS, YOU FUCKING IDIOT
-        # IF YOU DO, IT WILL RUIN YOUR LIFE FOR A MONTH WHILE YOU DEBUG IT
-        # NOTE TO SELF: DON'T FUCKING FORGET TO REMOVE THIS, YOU FUCKING IDIOT
-        # IF YOU DO, IT WILL RUIN YOUR LIFE FOR A MONTH WHILE YOU DEBUG IT
-        # NOTE TO SELF: DON'T FUCKING FORGET TO REMOVE THIS, YOU FUCKING IDIOT
-        # IF YOU DO, IT WILL RUIN YOUR LIFE FOR A MONTH WHILE YOU DEBUG IT
-        # NOTE TO SELF: DON'T FUCKING FORGET TO REMOVE THIS, YOU FUCKING IDIOT
-        # IF YOU DO, IT WILL RUIN YOUR LIFE FOR A MONTH WHILE YOU DEBUG IT
-        # NOTE TO SELF: DON'T FUCKING FORGET TO REMOVE THIS, YOU FUCKING IDIOT
-        # IF YOU DO, IT WILL RUIN YOUR LIFE FOR A MONTH WHILE YOU DEBUG IT
-        avol = avol[:,:-2,:]
-
-        
-
-        ndepth,nslow,nfast = avol.shape
-        profile = np.zeros(self.profile.shape)
-        profile[...] = self.profile[...]
-        profile = (profile-np.mean(profile))/np.std(profile)
-
-
-        
-        if len(profile)>ndepth:
-            profile = profile[:ndepth]
-        if ndepth>len(profile):
-            avol = avol[:len(profile),:,:]
-            ndepth,nslow,nfast = avol.shape
-
-        gross_profile = np.mean(np.mean(avol,axis=2),axis=1)
-        gross_offset,gross_goodness = translation1(gross_profile,profile,debug=False)
-        
-        offset_submatrix = np.ones((nslow,nfast))*gross_offset
-        goodness_submatrix = np.ones((nslow,nfast))*gross_goodness
-
-        # def smooth(v,k):
-        #     # an interface to lateral_smooth_3d that handles the
-        #     # transposing to minimize confusion
-            
-        #     return np.transpose(lateral_smooth_3d(np.transpose(avol_bc,(2,0,1)),k),(1,2,0))
-
-        def show_brightest_layer(v):
-            # assumes depth is first dimension
-            p = np.mean(np.mean(v,axis=2),axis=1)
-            mdepth = np.argmax(p)
-            layer = v[mdepth,:,:]
-            plt.figure()
-            plt.imshow(layer)
-            plt.colorbar()
-
-        
-
-        # fft the model, for cross-correlation by broadcasting
-        f0 = np.fft.fft(profile,axis=0)
-        self.logger.info('align_volume_multiscale: model length %d, FFT length %d.'%(len(profile),len(f0)))
-
-        started = False
-        sz,sy,sx = avol.shape
-        initial_step = float(max(sy,sx))
-        final_exp = -np.log(1.49999/initial_step)
-        steps = np.round(200*np.exp(-np.linspace(0.0,final_exp,10)))
-        
-        for k in steps:
-            self.logger.info('align_volume_multiscale: smoothing layers in the volume')
-            smoothed_avol = lateral_smooth_3d(avol,k)
-            # depth is still first dimension
-
-            f1 = np.fft.fft(smoothed_avol,axis=0)
-            f1c = f1.conjugate()
-
-            # transpose depth to the final dimension:
-            f1_transposed = np.transpose(f1,(1,2,0))
-            f1c_transposed = np.transpose(f1c,(1,2,0))
-            num_transposed = f0*f1c_transposed
-            denom_transposed = np.abs(f0)*np.abs(f1_transposed)
-            frac_transposed = num_transposed/denom_transposed
-
-            # now transpose back:
-            frac = np.transpose(frac_transposed,(2,0,1))
-            
-            
-            ir = np.abs(np.fft.ifft(frac,axis=0))
-            print np.mean(ir),np.max(ir),np.min(ir)
-
-            
-            goodness = np.max(ir,axis=0)
-            tx = np.argmax(ir,axis=0)
-
-            if not started:
-                #goodness_final = goodness.copy()
-                #tx_final = tx.copy()
-                goodness_final = np.zeros(goodness.shape)
-                tx_final = np.zeros(tx.shape)
-
-                goodness_final[...] = goodness[...]
-                tx_final[...] = tx[...]
-                
-                started = True
-                better_goodness_mask = np.zeros(goodness.shape)
-                small_shifts_mask = np.zeros(tx.shape)
-            else:
-                better_goodness = (goodness-goodness_final)>-.2
-                shift_limit = 10
-                small_shifts = np.abs(tx-tx_final)<shift_limit
-
-                better_goodness_mask = np.zeros(goodness.shape)
-                better_goodness_mask[np.where(better_goodness)] = 1.0
-                small_shifts_mask = np.zeros(tx.shape)
-                small_shifts_mask[np.where(small_shifts)] = 1.0
-
-
-            refinements = better_goodness_mask*small_shifts_mask
-            refined_idx = np.where(refinements)
-            print refined_idx
-            goodness_final[refined_idx] = goodness[refined_idx]
-            tx_final[refined_idx] = tx[refined_idx]
-            
-            if debug:
-                plt.clf()
-                plt.subplot(2,4,1)
-                plt.cla()
-                plt.imshow(goodness-goodness_final,cmap='gray')
-                plt.colorbar()
-                plt.title('$\Delta$ current goodness k=%d'%k)
-
-                plt.subplot(2,4,2)
-                plt.cla()
-                plt.imshow(tx-tx_final,cmap='gray')
-                plt.colorbar()
-                plt.title('$\Delta$ current tx k=%d'%k)
-
-                plt.subplot(2,4,3)
-                plt.cla()
-                plt.imshow(better_goodness_mask,cmap='gray')
-                plt.title('better_goodness_mask')
-                plt.colorbar()
-                
-                plt.subplot(2,4,4)
-                plt.cla()
-                plt.imshow(refinements,cmap='gray')
-                plt.title('refinements')
-                plt.colorbar()
-                
-                plt.subplot(2,4,5)
-                plt.cla()
-                plt.imshow(goodness_final,cmap='gray')
-                plt.colorbar()
-                plt.title('overall goodness k=%d'%k)
-
-                plt.subplot(2,4,6)
-                plt.cla()
-                plt.imshow(tx_final,cmap='gray')
-                plt.colorbar()
-                plt.title('overall tx k=%d'%k)
-
-                plt.subplot(2,4,7)
-                plt.cla()
-                plt.imshow(small_shifts_mask,cmap='gray')
-                plt.colorbar()
-                plt.title('small_shifts_mask')
-                
-                plt.subplot(2,4,8)
-                plt.cla()
-                plt.imshow(np.mean(smoothed_avol,axis=2),cmap='gray')
-                plt.colorbar()
-
-                
-                plt.show()
-
-            
-
+        offset_submatrix,goodness_submatrix = align_volume_to_profile_multiscale(avol,self.profile)
+        return offset_submatrix,goodness_submatrix,offset_submatrix
     
     def align_volume(self,vidx=0,rad=5):
         self.logger.info('align_volume: Starting')

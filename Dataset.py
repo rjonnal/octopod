@@ -103,7 +103,7 @@ class Dataset:
 
 
     def label(self):
-        m = Model(self.h5)
+        m = Model(self.h5,data_block='flattened_data')
         m.write_axial_alignment()
         m.write_volume_labels()
 

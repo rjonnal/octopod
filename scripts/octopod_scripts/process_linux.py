@@ -34,14 +34,15 @@ for fn in files:
     
 # supervised steps:
 for fn in files:
-    d = Dataset(fn)
-    d.show()
     continue
+    d = Dataset(fn)
+    #d.show()
+    #continue
     #d.flip()
-    d.crop()
+    #d.crop()
     #d.align()
-    d.model()
-    
+    #d.model()
+
 # unsupervised step:
 for src in files:
     continue
