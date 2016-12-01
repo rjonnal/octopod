@@ -44,11 +44,9 @@ for fn in files:
     #d.model()
 
 # unsupervised step:
-for src in files:
-    continue
-    d = Dataset(src)
+for fn in files:
+    d = Dataset(fn)
     d.label()
-    continue
     hfn = fn.replace('.unp','.hdf5')
     h5 = H5(hfn)
     r = Reporter(h5,hfn.replace('.hdf5','')+'_report')

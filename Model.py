@@ -28,7 +28,7 @@ def align_volume_to_profile_by_bscans(avol,profile):
     plt.show()
     #sys.exit()
     
-def align_volume_to_profile_multiscale(avol,profile,debug=True):
+def align_volume_to_profile_multiscale(avol,profile,debug=False):
     # put depth first
     avol = np.swapaxes(avol,0,1)
 
@@ -386,7 +386,7 @@ class Model:
 
 
 
-    def write_volume_labels(self,z_range=2,opening_strel=(1,15),goodness_threshold=0.25,use_fit=True):
+    def write_volume_labels(self,z_range=1,opening_strel=(1,15),goodness_threshold=0.25,use_fit=True):
         nvol,nslow,ndepth,nfast = self.h5.get(self.data_block).shape
         if use_fit:
             self.logger.info('write_volume_labels: using fit')
