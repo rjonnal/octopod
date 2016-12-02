@@ -290,8 +290,12 @@ class Window(QtGui.QWidget):
             self.raw_vol = self.h5.get('raw_data')[0,:,:,:]
             self.k_in = self.h5.get('k_in')
             self.k_out = self.h5.get('k_out')
-            self.dispersion_coefs = self.h5.get('dispersion/coefficients')
-            
+            try:
+                self.dispersion_coefs = self.h5.get('dispersion/coefficients')
+            except Exception as e:
+                print e
+                self.dispersion_coefs = np.zeros(4)
+                
             self.coef_3_min = self.dispersion_coefs[0]
             self.coef_3_max = self.dispersion_coefs[0]
             self.coef_2_min = self.dispersion_coefs[1]
@@ -310,9 +314,12 @@ class Window(QtGui.QWidget):
             self.show_bscan()
             
     def write_coefs(self):
-        old_coefs = self.h5.get('dispersion/coefficients')
+        try:
+            old_coefs = self.h5.get('dispersion/coefficients')
+            self.h5.put('dispersion/old_coefficients',old_coefs)
+        except Exception as e:
+            print e, '... skipping.'
         self.h5.put('dispersion/coefficients',self.dispersion_coefs)
-        self.h5.put('dispersion/old_coefficients',old_coefs)
 
         ddb = H5(ocfg.dispersion_database)
         did = self.h5.get('IDs/dataset_id')[()]
