@@ -610,12 +610,13 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=5.0,collapse_st
 
 # a simplified version of map_rasters above
 # assumes fast is horizontal
+
 def strip_register(target,reference,strip_width=3.0,do_plot=False):
 
     sy,sx = target.shape
     sy2,sx2 = reference.shape
 
-    ir_stack = np.zeros((sy,sy,sx))
+    #ir_stack = np.zeros((sy,sy,sx))
     
     assert sy==sy2 and sx==sx2
 
@@ -668,7 +669,10 @@ def strip_register(target,reference,strip_width=3.0,do_plot=False):
         frac = num/denom
         ir = np.abs(np.fft.ifft2(frac))
 
-        ir_stack[iy,:,:] = np.fft.fftshift(ir)
+
+        #find fractional offsets:
+        
+        #ir_stack[iy,:,:] = np.fft.fftshift(ir)
         
         goodness = np.max(ir)
         scaled_goodness = goodness*np.sqrt(factor) # i have no idea why this works because i'm an idiot
@@ -697,86 +701,13 @@ def strip_register(target,reference,strip_width=3.0,do_plot=False):
         plt.plot(x[good],np.array(vec)[good],'go')
 
 
-    irs_max = np.max(ir_stack)
-    irs_zmax,irs_ymax,irs_xmax = np.where(ir_stack==irs_max)
-    irs_zmax = irs_zmax[0]
-    irs_ymax = irs_ymax[0]
-    irs_xmax = irs_xmax[0]
-
-    path_x = np.zeros(ir_stack.shape[0])
-    path_y = np.zeros(ir_stack.shape[0])
-
-    path_x[irs_zmax] = irs_xmax
-    path_y[irs_zmax] = irs_ymax
-
-    # work forward
-    XX,YY = np.meshgrid(np.arange(ir_stack.shape[2]),np.arange(ir_stack.shape[1]))
     
-    for z in range(irs_zmax,1,-1):
-        f1 = ir_stack[z,:,:]
-        current_y,current_x = np.where(f1==f1.max())
-
-        # what to try here:
-        # first, smooth the test frame, f2
-        # using the peak of the current frame, f1, make a gaussian
-        # 2D window to project into the test frame, f2
-        # this will weight the test correlations according to proximity
-        # we then choose the next step as the resulting peak.
-
-        f2 = ir_stack[z-1,:,:]
-        f2 = gaussian_convolve(f2,.25)
-        plt.cla()
-        plt.imshow(f2,clim=(ir_stack.min(),ir_stack.max()))
-        plt.pause(.1)
-        xx = XX-current_x
-        yy = YY-current_y
-        
-    
-    sys.exit()
-        
     plt.subplot(1,3,1)
     plotgood(x_peaks,goodnesses)
     plt.subplot(1,3,2)
     plotgood(y_peaks,goodnesses)
     plt.subplot(1,3,3)
     plt.plot(goodnesses)
-
-
-    plt.show()
-    sys.exit()
-    plt.clf()
-    plt.cla()
-    plt.imshow(ir,cmap='gray',clim=(0,.1),interpolation='none')
-    plt.autoscale(False)
-    if goodness>np.mean(ir)+3*np.std(ir):
-        plt.plot(peakx,peaky,'go',markersize=16)
-    plt.title(iy)
-    plt.pause(.1)
-
-
-
-    sys.exit()
-
-
-    if do_plot:
-        clims = np.percentile(np.hstack((target,reference)),(5,99))
-        plt.figure()
-        plt.imshow(target,interpolation='none',cmap='gray',aspect='auto',clim=clims)
-        plt.colorbar()
-        plt.title('target')
-        plt.figure()
-        plt.imshow(reference,interpolation='none',cmap='gray',aspect='auto',clim=clims)
-        plt.colorbar()
-        plt.title('reference')
-
-        plt.figure()
-        plt.subplot(3,1,1)
-        plt.plot(y_peaks)
-        plt.subplot(3,1,2)
-        plt.plot(x_peaks)
-        plt.subplot(3,1,3)
-        plt.plot(goodnesses)
-        
 
 
     if dx_max or dy_max:
@@ -820,24 +751,48 @@ def strip_register(target,reference,strip_width=3.0,do_plot=False):
     if do_plot:
         plt.show()
     
-
     if fast_vertical:
         return y_peaks,x_peaks,goodnesses
     else:
         return x_peaks,y_peaks,goodnesses
         
+    
 
+def graph_traverse_xcorr_stack(ir_stack):
+    irs_max = np.max(ir_stack)
+    irs_zmax,irs_ymax,irs_xmax = np.where(ir_stack==irs_max)
+    irs_zmax = irs_zmax[0]
+    irs_ymax = irs_ymax[0]
+    irs_xmax = irs_xmax[0]
 
-        # sanity check to make sure things are scaled correctly
-        # single_line = target[:,ix]
-        # plt.plot(line)
-        # plt.plot(single_line)
-        # plt.show()
+    path_x = np.zeros(ir_stack.shape[0])
+    path_y = np.zeros(ir_stack.shape[0])
 
-        # def print_stats(arr):
-        #     print np.min(arr),np.mean(arr),np.max(arr)
+    path_x[irs_zmax] = irs_xmax
+    path_y[irs_zmax] = irs_ymax
 
+    # work forward
+    XX,YY = np.meshgrid(np.arange(ir_stack.shape[2]),np.arange(ir_stack.shape[1]))
 
+    for z in range(irs_zmax,1,-1):
+        f1 = ir_stack[z,:,:]
+        current_y,current_x = np.where(f1==f1.max())
+
+        # what to try here:
+        # first, smooth the test frame, f2
+        # using the peak of the current frame, f1, make a gaussian
+        # 2D window to project into the test frame, f2
+        # this will weight the test correlations according to proximity
+        # we then choose the next step as the resulting peak.
+
+        f2 = ir_stack[z-1,:,:]
+        f2 = gaussian_convolve(f2,.25)
+        plt.cla()
+        plt.imshow(f2,clim=(ir_stack.min(),ir_stack.max()))
+        plt.pause(.1)
+        xx = XX-current_x
+        yy = YY-current_y
+        
 
 
     
@@ -1163,7 +1118,28 @@ def ascend(vec,start):
 
 def descend(vec,start):
     return ascend(-vec,start)
+
+def deproud(im,y1,y2,x1,x2):
+    '''Return bounding box coordinates that are not proud of the image.'''
+    sy,sx = im.shape
+    assert y2-y1<sy
+    assert x2-x1<sx
     
+    while y1<0:
+        y1 = y1 + 1
+        y2 = y2 + 1
+    while y2>sy-1:
+        y1 = y1 - 1
+        y2 = y2 - 1
+    while x1<0:
+        x1 = x1 + 1
+        x2 = x2 + 1
+    while x2>sx-1:
+        x1 = x1 - 1
+        x2 = x2 - 1
+
+    return y1,y2,x1,x2
+        
         
 def nxcorr1(vec1,vec2,doPlots=False):
     '''Returns shift,xc:
