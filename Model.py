@@ -97,16 +97,16 @@ def align_volume_to_profile_multiscale(avol,profile,debug=False):
 
     started = False
     sz,sy,sx = avol.shape
-    initial_step = float(max(sy,sx))
+    initial_step = float(max(sy,sx))/4.0
     #final_exp = -np.log(1.49999/initial_step)
     #steps = np.round(100*np.exp(-np.linspace(0.0,final_exp,8)))
     #steps = np.array([50,40,30,25,20,15,10,8,6,5,4,3,2,1])
-    n_steps = 5
+    n_steps = 3
     step_steepness = 5.0
     steps = np.linspace(initial_step**(1.0/step_steepness),0.8,n_steps)**step_steepness/2.0
     ellipticities = np.linspace(1.0,0.5**.25,n_steps)**4
 
-    print steps
+    #print steps
 #    show_volume = True
 #    if show_volume:
 #        for s in range(avol.shape[1]):

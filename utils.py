@@ -164,6 +164,8 @@ def autotrim_bscan(b):
     z2 = valid[-1]
     return b[z1:z2,:],z1,z2
 
+
+
 def translation(im0in, im1in, xlims=None, ylims=None, debug=False):
     """Return translation vector to register two images
     of equal size. Returns a 3-tuple (translation_x,translation_y,correlation)."""
@@ -606,6 +608,236 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=5.0,collapse_st
         #     print np.min(arr),np.mean(arr),np.max(arr)
 
 
+# a simplified version of map_rasters above
+# assumes fast is horizontal
+def strip_register(target,reference,strip_width=3.0,do_plot=False):
+
+    sy,sx = target.shape
+    sy2,sx2 = reference.shape
+
+    ir_stack = np.zeros((sy,sy,sx))
+    
+    assert sy==sy2 and sx==sx2
+
+    ref = np.abs((reference - np.mean(reference)))/np.std(reference)
+    tar = np.abs((target - np.mean(target)))/np.std(target)
+                 
+    x_peaks = []
+    y_peaks = []
+    goodnesses = []
+    f1 = np.fft.fft2(ref)
+    f1c = f1.conjugate()
+
+    def show2(im1,im2,func=lambda x: x):
+        plt.subplot(1,2,1)
+        plt.imshow(func(np.abs(im1)),cmap='gray',interpolation='none')
+        plt.colorbar()
+        plt.subplot(1,2,2)
+        plt.imshow(func(np.abs(im2)),cmap='gray',interpolation='none')
+        plt.colorbar()
+        plt.show()
+        sys.exit()
+        
+    for iy in range(sy):
+        # make a y coordinate vector centered about the
+        # region of interest
+        y = np.arange(sy)-float(iy)
+
+        use_gaussian = True
+        if use_gaussian:
+            g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
+            g = g/np.max(g)
+        else:
+            g = np.zeros(y.shape)
+            g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
+        
+
+        
+        temp_tar = (tar.T*g).T
+
+        factor = float(sy)/np.sum(g)
+
+        f0 = np.fft.fft2(temp_tar)
+
+        #show2(f0,f1,lambda x: np.fft.fftshift(np.log(x)))
+        
+        num = f0*f1c
+        denom = np.abs(f0)*np.abs(f1)
+
+        denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
+        frac = num/denom
+        ir = np.abs(np.fft.ifft2(frac))
+
+        ir_stack[iy,:,:] = np.fft.fftshift(ir)
+        
+        goodness = np.max(ir)
+        scaled_goodness = goodness*np.sqrt(factor) # i have no idea why this works because i'm an idiot
+        peakcoords = np.where(ir==goodness)
+        peaky = peakcoords[0][0]
+        peakx = peakcoords[1][0]
+
+        if peaky > sy // 2:
+            peaky -= sy
+
+        if peakx > sx // 2:
+            peakx -= sx
+
+
+        y_peaks.append(peaky)
+        x_peaks.append(peakx)
+        goodnesses.append(scaled_goodness)
+
+    def plotgood(vec,goodness,thresh=None):
+        x = np.arange(len(vec))
+        if thresh is None:
+            thresh = np.mean(goodness)+0*np.std(goodness)
+        good = np.where(goodness>thresh)
+        print goodness,thresh
+        plt.plot(x,vec)
+        plt.plot(x[good],np.array(vec)[good],'go')
+
+
+    irs_max = np.max(ir_stack)
+    irs_zmax,irs_ymax,irs_xmax = np.where(ir_stack==irs_max)
+    irs_zmax = irs_zmax[0]
+    irs_ymax = irs_ymax[0]
+    irs_xmax = irs_xmax[0]
+
+    path_x = np.zeros(ir_stack.shape[0])
+    path_y = np.zeros(ir_stack.shape[0])
+
+    path_x[irs_zmax] = irs_xmax
+    path_y[irs_zmax] = irs_ymax
+
+    # work forward
+    XX,YY = np.meshgrid(np.arange(ir_stack.shape[2]),np.arange(ir_stack.shape[1]))
+    
+    for z in range(irs_zmax,1,-1):
+        f1 = ir_stack[z,:,:]
+        current_y,current_x = np.where(f1==f1.max())
+
+        # what to try here:
+        # first, smooth the test frame, f2
+        # using the peak of the current frame, f1, make a gaussian
+        # 2D window to project into the test frame, f2
+        # this will weight the test correlations according to proximity
+        # we then choose the next step as the resulting peak.
+
+        f2 = ir_stack[z-1,:,:]
+        f2 = gaussian_convolve(f2,.25)
+        plt.cla()
+        plt.imshow(f2,clim=(ir_stack.min(),ir_stack.max()))
+        plt.pause(.1)
+        xx = XX-current_x
+        yy = YY-current_y
+        
+    
+    sys.exit()
+        
+    plt.subplot(1,3,1)
+    plotgood(x_peaks,goodnesses)
+    plt.subplot(1,3,2)
+    plotgood(y_peaks,goodnesses)
+    plt.subplot(1,3,3)
+    plt.plot(goodnesses)
+
+
+    plt.show()
+    sys.exit()
+    plt.clf()
+    plt.cla()
+    plt.imshow(ir,cmap='gray',clim=(0,.1),interpolation='none')
+    plt.autoscale(False)
+    if goodness>np.mean(ir)+3*np.std(ir):
+        plt.plot(peakx,peaky,'go',markersize=16)
+    plt.title(iy)
+    plt.pause(.1)
+
+
+
+    sys.exit()
+
+
+    if do_plot:
+        clims = np.percentile(np.hstack((target,reference)),(5,99))
+        plt.figure()
+        plt.imshow(target,interpolation='none',cmap='gray',aspect='auto',clim=clims)
+        plt.colorbar()
+        plt.title('target')
+        plt.figure()
+        plt.imshow(reference,interpolation='none',cmap='gray',aspect='auto',clim=clims)
+        plt.colorbar()
+        plt.title('reference')
+
+        plt.figure()
+        plt.subplot(3,1,1)
+        plt.plot(y_peaks)
+        plt.subplot(3,1,2)
+        plt.plot(x_peaks)
+        plt.subplot(3,1,3)
+        plt.plot(goodnesses)
+        
+
+
+    if dx_max or dy_max:
+        # now, walk through x and y vectors and remove outliers
+        start = np.argmax(goodnesses)
+        x_fixed = np.zeros(len(x_peaks))
+        y_fixed = np.zeros(len(y_peaks))
+        x_fixed[start] = x_peaks[start]
+        y_fixed[start] = y_peaks[start]
+        for k in range(start,sx-1):
+            if np.abs(x_peaks[k+1]-x_fixed[k])<=dx_max:
+                x_fixed[k+1]=x_peaks[k+1]
+            else:
+                x_fixed[k+1]=x_fixed[k]
+            if np.abs(y_peaks[k+1]-y_fixed[k])<=dy_max:
+                y_fixed[k+1]=y_peaks[k+1]
+            else:
+                y_fixed[k+1]=y_fixed[k]
+        for k in range(start,1,-1):
+            if np.abs(x_peaks[k-1]-x_fixed[k])<=dx_max:
+                x_fixed[k-1]=x_peaks[k-1]
+            else:
+                x_fixed[k-1]=x_fixed[k]
+            if np.abs(y_peaks[k-1]-y_fixed[k])<=dy_max:
+                y_fixed[k-1]=y_peaks[k-1]
+            else:
+                y_fixed[k-1]=y_fixed[k]
+
+        if do_plot:
+            plt.figure()
+            plt.subplot(3,1,1)
+            plt.plot(y_peaks)
+            plt.title('fixed')
+            plt.subplot(3,1,2)
+            plt.plot(x_peaks)
+            plt.title('fixed')
+            plt.subplot(3,1,3)
+            plt.plot(goodnesses)
+
+
+    if do_plot:
+        plt.show()
+    
+
+    if fast_vertical:
+        return y_peaks,x_peaks,goodnesses
+    else:
+        return x_peaks,y_peaks,goodnesses
+        
+
+
+        # sanity check to make sure things are scaled correctly
+        # single_line = target[:,ix]
+        # plt.plot(line)
+        # plt.plot(single_line)
+        # plt.show()
+
+        # def print_stats(arr):
+        #     print np.min(arr),np.mean(arr),np.max(arr)
+
+
 
 
     
@@ -906,6 +1138,13 @@ def findPeaks2d(im,axis=2,vSlopeThreshold=0,hSlopeThreshold=0):
 
 
 def ascend(vec,start):
+    floor = np.floor
+    ceil = np.ceil
+    if vec[floor(start)]>vec[ceil(start)]:
+        start = floor(start)
+    elif vec[floor(start)]<vec[ceil(start)]:
+        start = ceil(start)
+
     out = start
 
     try:
@@ -920,7 +1159,7 @@ def ascend(vec,start):
     except Exception as e:
         print e
 
-    return out
+    return int(out)
 
 def descend(vec,start):
     return ascend(-vec,start)
