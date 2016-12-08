@@ -611,11 +611,10 @@ def map_rasters(target,reference,strip_width=1.0,reference_width=5.0,collapse_st
 # a simplified version of map_rasters above
 # assumes fast is horizontal
 
-def strip_register(target,reference,strip_width=3.0,do_plot=False):
+def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=False):
 
     sy,sx = target.shape
     sy2,sx2 = reference.shape
-
     #ir_stack = np.zeros((sy,sy,sx))
     
     assert sy==sy2 and sx==sx2
@@ -629,15 +628,24 @@ def strip_register(target,reference,strip_width=3.0,do_plot=False):
     f1 = np.fft.fft2(ref)
     f1c = f1.conjugate()
 
-    def show2(im1,im2,func=lambda x: x):
+
+    Ny = sy*oversample_factor
+    Nx = sx*oversample_factor
+
+    XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
+    
+    def show2(im1,im2,func=lambda x: x,pause=False):
+        plt.clf()
         plt.subplot(1,2,1)
         plt.imshow(func(np.abs(im1)),cmap='gray',interpolation='none')
         plt.colorbar()
         plt.subplot(1,2,2)
         plt.imshow(func(np.abs(im2)),cmap='gray',interpolation='none')
         plt.colorbar()
-        plt.show()
-        sys.exit()
+        if pause:
+            plt.pause(.1)
+        else:
+            plt.show()
         
     for iy in range(sy):
         # make a y coordinate vector centered about the
@@ -652,8 +660,8 @@ def strip_register(target,reference,strip_width=3.0,do_plot=False):
             g = np.zeros(y.shape)
             g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
         
+        correlation_factor = np.sum(np.ones(g.shape))/np.sum(g)
 
-        
         temp_tar = (tar.T*g).T
 
         factor = float(sy)/np.sum(g)
@@ -667,96 +675,31 @@ def strip_register(target,reference,strip_width=3.0,do_plot=False):
 
         denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
         frac = num/denom
-        ir = np.abs(np.fft.ifft2(frac))
 
 
-        #find fractional offsets:
+        ir = np.abs(np.fft.ifft2(frac,s=(Ny,Nx)))
+        goodness = np.max(ir)*correlation_factor
         
-        #ir_stack[iy,:,:] = np.fft.fftshift(ir)
-        
-        goodness = np.max(ir)
-        scaled_goodness = goodness*np.sqrt(factor) # i have no idea why this works because i'm an idiot
-        peakcoords = np.where(ir==goodness)
-        peaky = peakcoords[0][0]
-        peakx = peakcoords[1][0]
+        centered_ir = np.fft.fftshift(ir)
+        cpeaky,cpeakx = np.where(centered_ir==np.max(centered_ir))
+        xx = XX - cpeakx
+        yy = YY - cpeaky
+        d = np.sqrt(xx**2+yy**2)
+        mask = np.zeros(d.shape)
+        mask[np.where(d<=oversample_factor)] = 1.0
 
-        if peaky > sy // 2:
-            peaky -= sy
+        centroidable = centered_ir*mask
+        peakx = np.sum(centroidable*XX)/np.sum(centroidable)
+        peaky = np.sum(centroidable*YY)/np.sum(centroidable)
 
-        if peakx > sx // 2:
-            peakx -= sx
+        peakx = peakx - Nx // 2
+        peaky = peaky - Ny // 2
 
+        y_peaks.append(peaky/oversample_factor)
+        x_peaks.append(peakx/oversample_factor)
+        goodnesses.append(goodness)
 
-        y_peaks.append(peaky)
-        x_peaks.append(peakx)
-        goodnesses.append(scaled_goodness)
-
-    def plotgood(vec,goodness,thresh=None):
-        x = np.arange(len(vec))
-        if thresh is None:
-            thresh = np.mean(goodness)+0*np.std(goodness)
-        good = np.where(goodness>thresh)
-        print goodness,thresh
-        plt.plot(x,vec)
-        plt.plot(x[good],np.array(vec)[good],'go')
-
-
-    
-    plt.subplot(1,3,1)
-    plotgood(x_peaks,goodnesses)
-    plt.subplot(1,3,2)
-    plotgood(y_peaks,goodnesses)
-    plt.subplot(1,3,3)
-    plt.plot(goodnesses)
-
-
-    if dx_max or dy_max:
-        # now, walk through x and y vectors and remove outliers
-        start = np.argmax(goodnesses)
-        x_fixed = np.zeros(len(x_peaks))
-        y_fixed = np.zeros(len(y_peaks))
-        x_fixed[start] = x_peaks[start]
-        y_fixed[start] = y_peaks[start]
-        for k in range(start,sx-1):
-            if np.abs(x_peaks[k+1]-x_fixed[k])<=dx_max:
-                x_fixed[k+1]=x_peaks[k+1]
-            else:
-                x_fixed[k+1]=x_fixed[k]
-            if np.abs(y_peaks[k+1]-y_fixed[k])<=dy_max:
-                y_fixed[k+1]=y_peaks[k+1]
-            else:
-                y_fixed[k+1]=y_fixed[k]
-        for k in range(start,1,-1):
-            if np.abs(x_peaks[k-1]-x_fixed[k])<=dx_max:
-                x_fixed[k-1]=x_peaks[k-1]
-            else:
-                x_fixed[k-1]=x_fixed[k]
-            if np.abs(y_peaks[k-1]-y_fixed[k])<=dy_max:
-                y_fixed[k-1]=y_peaks[k-1]
-            else:
-                y_fixed[k-1]=y_fixed[k]
-
-        if do_plot:
-            plt.figure()
-            plt.subplot(3,1,1)
-            plt.plot(y_peaks)
-            plt.title('fixed')
-            plt.subplot(3,1,2)
-            plt.plot(x_peaks)
-            plt.title('fixed')
-            plt.subplot(3,1,3)
-            plt.plot(goodnesses)
-
-
-    if do_plot:
-        plt.show()
-    
-    if fast_vertical:
-        return y_peaks,x_peaks,goodnesses
-    else:
-        return x_peaks,y_peaks,goodnesses
-        
-    
+    return y_peaks,x_peaks,goodnesses
 
 def graph_traverse_xcorr_stack(ir_stack):
     irs_max = np.max(ir_stack)
@@ -1531,6 +1474,12 @@ def strel(kind='disk',diameter=15):
         out[np.where(d<=diameter/2.0)] = 1.0
         return out
 
+def grey_open(im,strel=strel()):
+    return morphology.grey_opening(im,structure=strel)
+    
+def grey_close(im,strel=strel()):
+    return morphology.grey_closing(im,structure=strel)
+    
 def background_subtract(im,strel=strel()):
     if len(im.shape)==2:
         bg = morphology.grey_opening(im,structure=strel)

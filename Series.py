@@ -60,8 +60,18 @@ class Series:
             stack[idx,:,:] = target_h5['projections'][layer_name][vidx,:,:]
         target = np.mean(stack,axis=0)
         reference = self.reference
-        utils.strip_register(target[slowmin:slowmax,fastmin:fastmax],reference[slowmin:slowmax,fastmin:fastmax],do_plot=True)
-        
+        sy,sx = target.shape
+        n = max(sy,sx)
+        h = np.hamming(n)
+        ham2d = np.sqrt(np.outer(h,h))
+        ham2d = ham2d[slowmin:slowmax,fastmin:fastmax]
+        y,x,g = utils.strip_register(target[slowmin:slowmax,fastmin:fastmax],reference[slowmin:slowmax,fastmin:fastmax],do_plot=True)
+        plt.subplot(2,1,1)
+        plt.plot(x)
+        plt.plot(y)
+        plt.subplot(2,1,2)
+        plt.plot(g)
+        plt.show()
 
     
         
@@ -78,6 +88,6 @@ if __name__=='__main__':
     #fn = '/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.08.16/14_44_08-4T_500.hdf5' # volume
     
     s = Series(fn,vidx=0,layer_names=['ISOS'])
-    s.add(tfn,vidx=0,fastmin=20)
+    s.add(tfn,vidx=5,fastmin=20)
     #s = Series('./oct_test_volume/oct_test_volume_2T.hdf5')
     
