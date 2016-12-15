@@ -716,7 +716,7 @@ def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=
         peakx = peakx - Nx // 2
         peaky = peaky - Ny // 2
 
-        y_peaks.append(float(iy)+peaky/oversample_factor)
+        y_peaks.append(peaky/oversample_factor)
         x_peaks.append(peakx/oversample_factor)
         goodnesses.append(goodness)
 

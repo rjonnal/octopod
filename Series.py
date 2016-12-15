@@ -96,12 +96,18 @@ class Series:
         fn,vidx = self.tag_to_filename_vidx(tag)
         return self.get_image(fn,vidx)
 
-    def imshow_tag(self,tag):
+    def imshow_tag(self,tag,fig=None):
         im = self.get_image_tag(tag)
         self.imshow(im)
+
+
         
-    def imshow(self,im):
-        plt.figure()
+    def imshow(self,im,fig=None):
+        if fig is None:
+            plt.figure()
+        else:
+            plt.clf()
+            plt.cla()
         plt.imshow(im,cmap='gray',clim=np.percentile(im,(5,99.5)))
     
     def catalog(self):
@@ -110,13 +116,30 @@ class Series:
     def close(self):
         self.h5.close()
 
-    def render(self,goodness_threshold=None,oversample_factor=5.0):
+
+    def fix_yshifts(self):
+        sys.exit('Are you sure you want to do this? You probably already fixed it!')
+        keys = self.h5.keys()
+        for k in keys:
+            yshifts = self.h5['%s/y_shifts'%k][:]
+            new_yshifts = yshifts - np.arange(self.n_slow)
+            self.h5.put('%s/y_shifts_with_offset'%k,yshifts)
+            del self.h5.h5['%s/y_shifts'%k]
+            self.h5.put('%s/y_shifts'%k,new_yshifts)
+        sys.exit()
+
+    def render(self,goodness_threshold=None,oversample_factor=5.0,keylist=None):
 
         if goodness_threshold is None:
             goodness_threshold = np.median(self.get_all_goodnesses())
 
-        keys = self.h5.keys()
+        if keylist is None:
+            keys = self.h5.keys()
+        else:
+            keys = keylist
 
+        sign = -1
+            
         # first, find the minimum and maximum x and y shifts
         xmin = np.inf
         xmax = -np.inf
@@ -124,9 +147,13 @@ class Series:
         ymax = -np.inf
         for k in keys:
             goodnesses = self.h5['%s/goodnesses'%k][:]
-            xshifts = self.h5['%s/x_shifts'%k][:]
-            yshifts = self.h5['%s/y_shifts'%k][:]
+            xshifts = sign*self.h5['%s/x_shifts'%k][:]
+            yshifts = sign*self.h5['%s/y_shifts'%k][:]
 
+            xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
+
+            yshifts = yshifts + np.arange(self.n_slow)
+            
             valid = np.where(goodnesses>=goodness_threshold)[0]
             
             if len(valid):
@@ -154,48 +181,96 @@ class Series:
         ymax = np.round(ymax*oversample_factor)
         dy = ymax-ymin
         yoffset = ymin
-        height = dy
+        height = oversample_factor + dy
 
         sum_image = np.zeros((height,width))
         counter_image = np.ones((height,width))
 
+        ref_oversampled = imresize(self.reference,int(round(oversample_factor*100)),interp='nearest')
+
+        
+        print ref_oversampled.shape
+        x1 = round(sign*xoffset)
+        x2 = x1+ref_oversampled.shape[1]
+        y1 = round(sign*yoffset)
+        y2 = y1+ref_oversampled.shape[0]
+        print y1,y2,x1,x2
+
+        print sum_image.shape
+        #sum_image[y1:y2,x1:x2] = ref_oversampled
+        
         print 'sum size:',sum_image.shape
+        fig = plt.figure()
+
+        test_corr = True
         
         for k in keys:
             goodnesses = self.h5['%s/goodnesses'%k][:]
-            xshifts = self.h5['%s/x_shifts'%k][:]
-            yshifts = self.h5['%s/y_shifts'%k][:]
+            xshifts = sign*self.h5['%s/x_shifts'%k][:]
+            yshifts = sign*self.h5['%s/y_shifts'%k][:]
+
+            xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
 
             valid = np.where(goodnesses>=goodness_threshold)[0]
 
             im = self.get_image_tag(k)
             if len(valid):
-                xshifts = xshifts[valid]
-                yshifts = yshifts[valid]
+                #xshifts = xshifts[valid]
+                #yshifts = yshifts[valid]
 
+                print len(xshifts),len(yshifts)
+                print valid
+                
                 for v in valid:
                     line = im[v,:]
-                    line = np.expand_dims(line,1)
+                    line = np.expand_dims(line,0)
                     block = imresize(line,int(oversample_factor*100),interp='nearest')
                     bsy,bsx = block.shape
-                    print 'unscaled shifts',yshifts[v],xshifts[v]
                     x1 = np.round(xshifts[v]*oversample_factor-xoffset)
-                    y1 = np.round(yshifts[v]*oversample_factor-yoffset)
+                    y1 = v*oversample_factor+np.round(yshifts[v]*oversample_factor-yoffset)
                     x2 = x1+bsx
                     y2 = y1+bsy
 
-                    print 'insertion points',y1,y2,x1,x2
+                    if test_corr:
+                        im1 = sum_image[y1:y2,x1:x2].ravel()
+                        if np.min(im1)==np.max(im1):
+                            corr = 1.0
+                        else:
+                            valid = np.where(im1)[0]
+                            corr = np.corrcoef(im1[valid],block.ravel()[valid])[1,0]
+                        print corr
                     
                     sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                     counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
                     av = sum_image/counter_image
-                    self.imshow(av)
-                    plt.show()
+                    self.imshow(av,fig)
+                    plt.pause(.0001)
                 
             
         sys.exit()
 
 
+    def filter_registration(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
+
+        
+        xvalid = np.abs(xshifts - np.median(xshifts))<=xmax
+        yvalid = np.abs(yshifts - np.median(yshifts))<=ymax
+        invalid = np.logical_or(1-xvalid,1-yvalid)
+
+        # for xv,yv,iv in zip(xvalid,yvalid,invalid):
+        #     print xv,yv,iv
+        # sys.exit()
+        
+        # plt.plot(xshifts)
+        # plt.plot(yshifts)
+        # plt.plot((goodnesses-np.mean(goodnesses))*10000)
+        # plt.show()
+        # sys.exit()
+
+        goodnesses[invalid] = -np.inf
+
+        return xshifts,yshifts,goodnesses
+        
     def goodness_histogram(self):
         all_goodnesses = self.get_all_goodnesses()
         plt.hist(all_goodnesses,100)
@@ -242,8 +317,13 @@ if __name__=='__main__':
 
     s = Series(ref_fn,vidx=7,layer_names=['ISOS','COST'])
     #s.show_images()
-    s.goodness_histogram()
-    s.render()
+    #s.goodness_histogram()
+
+    keylist = ['14_13_13-1T_500_%03d'%7]
+    for k in range(12):
+        if not k==7:
+            keylist.append('14_13_13-1T_500_%03d'%k)
+    s.render(keylist=keylist)
     s.close()
     sys.exit()
     files = glob.glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.11.21_cones/*.hdf5')
