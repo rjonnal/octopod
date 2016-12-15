@@ -627,7 +627,7 @@ def show2(im1,im2,func=lambda x: x,pause=False):
     else:
         plt.show()
         
-def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=False):
+def strip_register(target,reference,strip_width=5.0,oversample_factor=5,do_plot=False):
 
     sy,sx = target.shape
     sy2,sx2 = reference.shape
@@ -645,36 +645,19 @@ def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=
     f1 = np.fft.fft2(ref)
     f1c = f1.conjugate()
 
+    ref_autocorr_max = np.max(np.abs(np.fft.ifft2(f1*f1c)))
+    
     Ny = sy*oversample_factor
     Nx = sx*oversample_factor
 
-    ref_autocorr_max = np.max(np.abs(np.fft.ifft2(f1*f1c,s=(Ny,Nx))))
-    
     XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
-
-
-    use_gaussian = True
-    # y = np.arange(sy)-float(sy)/2.0
-    # if use_gaussian:
-    #     g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
-    #     g = g/np.max(g)
-    # else:
-    #     g = np.zeros(y.shape)
-    #     g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
-
-    # correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
-    # print correlation_factor
     
     for iy in range(sy):
-
-        pct_done = round(float(iy)/float(sy)*100)
-        if pct_done%10==0:
-            print '%d percent done.'%pct_done
-        
         # make a y coordinate vector centered about the
         # region of interest
         y = np.arange(sy)-float(iy)
 
+        use_gaussian = True
         if use_gaussian:
             g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
             g = g/np.max(g)
@@ -682,11 +665,8 @@ def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=
             g = np.zeros(y.shape)
             g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
         
-        #correlation_factor = np.sum(np.ones(g.shape))/np.sum(g)
-        correlation_factor = 1.0
-        #print correlation_factor
-        #continue
-        
+        correlation_factor = np.sum(np.ones(g.shape))/np.sum(g)
+
         temp_tar = (tar.T*g).T
 
         factor = float(sy)/np.sum(g)
@@ -694,14 +674,19 @@ def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=
         f0 = np.fft.fft2(temp_tar)
         num = f0*f1c
 
-
-        num = np.abs(np.fft.ifft2(num,s=(Ny,Nx)))
         tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
-        denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
+        print tar_autocorr_max
+        print np.max(np.abs(
         
-        goodness = np.max(num)/denom*correlation_factor
+        denom = np.abs(f0)*np.abs(f1)
+        denom[np.where(np.logical_and(num==0,denom==0))] = 1.0
+        frac = num/denom
+
+
+        ir = np.abs(np.fft.ifft2(frac,s=(Ny,Nx)))
+        goodness = np.max(ir)*correlation_factor
         
-        centered_ir = np.fft.fftshift(num)
+        centered_ir = np.fft.fftshift(ir)
         cpeaky,cpeakx = np.where(centered_ir==np.max(centered_ir))
         xx = XX - cpeakx
         yy = YY - cpeaky
