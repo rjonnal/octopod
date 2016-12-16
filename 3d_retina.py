@@ -115,8 +115,7 @@ plt.plot(cx,cy,'b.')
 plt.show()
 
 scatter_field = mlab.pipeline.scalar_field(newvol)
-vmin,vmax = np.percentile(avol,[80,99.5])
-print vmin,vmax
+vmin,vmax = np.percentile(ncones,[5,99])
 mlab.pipeline.volume(scatter_field,vmin=vmin,vmax=vmax)
 mlab.pipeline.image_plane_widget(scatter_field,
                                  plane_orientation='z_axes',
