@@ -288,6 +288,53 @@ def translation1(vec0in, vec1in, xlims=None, equalize=False, debug=False):
         tx -= shape
     return (tx, goodness)
 
+
+
+def find_cones(data,neighborhood_size,nstd=0.0,do_plot=False):
+
+
+    threshold = nstd*np.std(data)
+    
+    #neighborhood = morphology.generate_binary_structure(3,3)
+    #rad_ceil = np.ceil(neighborhood_radius)
+    
+    #XX,YY = np.meshgrid(np.arange(-rad_ceil,rad_ceil+1),np.arange(-rad_ceil,rad_ceil+1))
+    #d = np.sqrt(XX**2+YY**2)
+    #neighborhood = np.zeros(d.shape)
+    #neighborhood[np.where(d<=neighborhood_radius)] = 1.0
+    
+    data_max = filters.maximum_filter(data, neighborhood_size)
+    if do_plot:
+        clim = np.percentile(data,(5,99))
+        plt.figure()
+        plt.imshow(data,cmap='gray',interpolation='none',clim=clim)
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(data_max,cmap='gray',interpolation='none',clim=clim)
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(data_max-data,cmap='gray',interpolation='none',clim=clim)
+        plt.colorbar()
+    
+    maxima = (data == data_max)
+    data_min = filters.minimum_filter(data, neighborhood_size)
+    diff = ((data_max - data_min) > threshold)
+    maxima[diff == 0] = 0
+
+    
+    labeled, num_objects = ndimage.label(maxima)
+    slices = ndimage.find_objects(labeled)
+    x, y = [], []
+    for dy,dx in slices:
+        x_center = (dx.start + dx.stop - 1)/2
+        x.append(x_center)
+        y_center = (dy.start + dy.stop - 1)/2    
+        y.append(y_center)
+
+    return x,y
+
+    
+
 def find_peaks(prof,intensity_threshold=-np.inf,gradient_threshold=-np.inf):
     left = prof[:-2]
     center = prof[1:-1]
