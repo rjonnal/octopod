@@ -100,8 +100,6 @@ plt.autoscale(False)
 plt.plot(cx,cy,'b.')
 plt.show()
 
-sys.exit()
-
 def remove_overlaps(cx,cy,thresh=2):
     N = len(cx)
     cxo,cyo = [],[]
@@ -175,7 +173,7 @@ for x,y in zip(cx,cy):
 for z in range(newvol.shape[2]):
     newvol[:,:,z] = utils.gaussian_convolve(newvol[:,:,z],0.5)
 
-newvol = newvol + avol/2.0
+newvol = newvol + avol/4.0
 
 nisos = np.mean(newvol[:,:,isosidx-rad:isosidx+rad+1],axis=2)
 ncost = np.mean(newvol[:,:,costidx-rad:costidx+rad+1],axis=2)

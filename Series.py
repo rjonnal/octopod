@@ -128,10 +128,19 @@ class Series:
             self.h5.put('%s/y_shifts'%k,new_yshifts)
         sys.exit()
 
-    def render(self,goodness_threshold=None,oversample_factor=5.0,keylist=None):
-
+    def render(self,goodness_threshold=None,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False,keylist=None,oversample_factor=5):
         if goodness_threshold is None:
             goodness_threshold = np.median(self.get_all_goodnesses())
+
+        if slowmin is None:
+            slowmin = 0
+        if slowmax is None:
+            slowmax = self.n_slow
+
+        if fastmin is None:
+            fastmin = 0
+        if fastmax is None:
+            fastmax = self.n_fast
 
         if keylist is None:
             keys = self.h5.keys()
@@ -184,11 +193,10 @@ class Series:
         height = oversample_factor + dy
 
         sum_image = np.zeros((height,width))
-        counter_image = np.ones((height,width))
+        counter_image = np.zeros((height,width))
 
         ref_oversampled = imresize(self.reference,int(round(oversample_factor*100)),interp='nearest')
 
-        
         print ref_oversampled.shape
         x1 = round(sign*xoffset)
         x2 = x1+ref_oversampled.shape[1]
@@ -222,7 +230,7 @@ class Series:
                 print valid
                 
                 for v in valid:
-                    line = im[v,:]
+                    line = im[v,fastmin:fastmax]
                     line = np.expand_dims(line,0)
                     block = imresize(line,int(oversample_factor*100),interp='nearest')
                     bsy,bsx = block.shape
@@ -242,9 +250,23 @@ class Series:
                     
                     sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                     counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
-                    av = sum_image/counter_image
-                    self.imshow(av,fig)
-                    plt.pause(.0001)
+                    temp = counter_image.copy()
+                    temp[np.where(temp==0)] = 1.0
+                    av = sum_image/temp
+                    
+                    plt.clf()
+                    plt.subplot(1,2,1)
+                    plt.cla()
+                    plt.imshow(av,cmap='gray',clim=np.percentile(av,(5,99.5)))
+                    plt.colorbar()
+                    plt.subplot(1,2,2)
+                    plt.cla()
+                    plt.imshow(counter_image)
+                    plt.colorbar()
+                    plt.pause(.0000000001)
+
+        plt.show()
+                    
                 
             
         sys.exit()
@@ -323,7 +345,8 @@ if __name__=='__main__':
     for k in range(12):
         if not k==7:
             keylist.append('14_13_13-1T_500_%03d'%k)
-    s.render(keylist=keylist)
+    print keylist
+    s.render(keylist=None,fastmin=30)
     s.close()
     sys.exit()
     files = glob.glob('/home/rjonnal/data/Dropbox/Share/2g_aooct_data/Data/2016.11.21_cones/*.hdf5')
