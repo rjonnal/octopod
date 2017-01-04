@@ -674,7 +674,7 @@ def show2(im1,im2,func=lambda x: x,pause=False):
     else:
         plt.show()
         
-def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=False):
+def strip_register(target,reference,oversample_factor,strip_width,do_plot=False):
 
     sy,sx = target.shape
     sy2,sx2 = reference.shape
@@ -749,6 +749,9 @@ def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=
         goodness = np.max(num)/denom*correlation_factor
         
         centered_ir = np.fft.fftshift(num)
+
+        centered_ir = centered_ir - np.mean(centered_ir,axis=1)
+        
         cpeaky,cpeakx = np.where(centered_ir==np.max(centered_ir))
         xx = XX - cpeakx
         yy = YY - cpeaky
@@ -766,6 +769,27 @@ def strip_register(target,reference,strip_width=3.0,oversample_factor=5,do_plot=
         y_peaks.append(peaky/oversample_factor)
         x_peaks.append(peakx/oversample_factor)
         goodnesses.append(goodness)
+
+        if do_plot:
+            plt.clf()
+            plt.subplot(2,2,1)
+            plt.cla()
+            plt.imshow((centered_ir/denom*correlation_factor)**4,cmap='gray',interpolation='none')
+            plt.colorbar()
+            plt.subplot(2,2,2)
+            plt.cla()
+            plt.plot(x_peaks)
+            plt.plot(y_peaks)
+            plt.subplot(2,2,3)
+            plt.plot(goodnesses)
+            plt.cla()
+            plt.subplot(2,2,4)
+            plt.cla()
+            plt.plot(np.mean(centered_ir,axis=1))
+
+
+            plt.pause(.1)
+        
 
     return y_peaks,x_peaks,goodnesses
 

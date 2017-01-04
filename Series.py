@@ -58,7 +58,7 @@ class Series:
         self.reference_h5.close()
 
 
-    def add(self,filename,vidx,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False):
+    def add(self,filename,vidx,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False,oversample_factor=5,strip_width=3.0):
         
         print 'Adding %s, volume %d.'%(filename,vidx)
         if slowmin is None:
@@ -79,7 +79,8 @@ class Series:
 
         target = self.get_image(filename,vidx)
         reference = self.reference
-        y,x,g = utils.strip_register(target[slowmin:slowmax,fastmin:fastmax],reference[slowmin:slowmax,fastmin:fastmax],do_plot=True)
+        y,x,g = utils.strip_register(target[slowmin:slowmax,fastmin:fastmax],reference[slowmin:slowmax,fastmin:fastmax],oversample_factor,strip_width,do_plot=True)
+        
         self.h5.put('/%s/x_shifts'%target_tag,x)
         self.h5.put('/%s/y_shifts'%target_tag,y)
         self.h5.put('/%s/goodnesses'%target_tag,g)

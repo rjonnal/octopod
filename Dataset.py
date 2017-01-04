@@ -19,7 +19,8 @@ from octopod.Flipper import Flipper
 class Dataset:
 
     def __init__(self,raw_data_filename):
-        """Initiate a Dataset object based on a .unp raw OCT data file."""
+        """Initiate a Dataset object based on a .unp raw OCT data file. Pass just
+        the base name if a Dataset is being created without an associated .unp file."""
         self.raw_data_filename = raw_data_filename
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating Dataset based on %s.'%raw_data_filename)
@@ -27,6 +28,26 @@ class Dataset:
         self.h5fn = raw_temp + '.hdf5'
         self.xml_fn = raw_temp + '.xml'
         self.h5 = H5(self.h5fn)
+
+
+    def add_slo_frames(self,flist):
+        """Create a Dataset object from a series of SLO frames.
+        This method is modeled slightly after Dataset.initialize, below."""
+        self.h5.put('/config/n_vol',len(flist))
+        self.h5.put('/config/n_slow',512)
+        self.h5.put('/config/n_fast',512)
+        self.h5.put('/config/n_depth',1)
+
+        
+        n_vol = self.h5.get('/config/n_vol')[()]
+        n_slow = self.h5.get('/config/n_slow')[()]
+        n_fast = self.h5.get('/config/n_fast')[()]
+
+        raw_store = self.h5.make('projections/SLO',(n_vol,n_slow,n_fast),dtype='f8')
+
+        for vol_index,f in enumerate(flist):
+            im = sp.misc.imread(f).astype(np.float)
+            raw_store[vol_index,:,:] = im
 
     def get_h5_handle(self):
         return self.h5
