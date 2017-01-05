@@ -750,7 +750,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         
         centered_ir = np.fft.fftshift(num)
 
-        centered_ir = centered_ir - np.mean(centered_ir,axis=1)
+        #centered_ir = centered_ir - np.mean(centered_ir,axis=1)
         
         cpeaky,cpeakx = np.where(centered_ir==np.max(centered_ir))
         xx = XX - cpeakx
