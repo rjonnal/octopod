@@ -36,7 +36,7 @@ class Series:
         self.reference_tag = self.tag_template%(os.path.split(self.reference_filename)[1].replace('.hdf5',''),vidx)
         h5fn = self.tag_template%(self.reference_filename.replace('.hdf5',''),vidx)+'_series.hdf5'
         self.h5 = H5(h5fn)
-        
+
         self.n_vol = self.reference_h5['config']['n_vol'].value
         self.n_fast = self.reference_h5['config']['n_fast'].value
         self.n_slow = self.reference_h5['config']['n_slow'].value
@@ -129,9 +129,14 @@ class Series:
             self.h5.put('%s/y_shifts'%k,new_yshifts)
         sys.exit()
 
-    def render(self,goodness_threshold=None,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False,keylist=None,oversample_factor=5):
+    def render(self,goodness_threshold=None,correlation_threshold=None,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False,keylist=None,oversample_factor=5,do_plot=False):
+
         if goodness_threshold is None:
-            goodness_threshold = np.median(self.get_all_goodnesses())
+            # goodness_threshold = np.median(self.get_all_goodnesses())
+            goodness_threshold = 0.0
+
+        if correlation_threshold is None:
+            correlation_threshold = 0.0
 
         if slowmin is None:
             slowmin = 0
@@ -155,21 +160,20 @@ class Series:
         xmax = -np.inf
         ymin = np.inf
         ymax = -np.inf
-
         for k in keys:
             goodnesses = self.h5['%s/goodnesses'%k][:]
             xshifts = sign*self.h5['%s/x_shifts'%k][:]
             yshifts = sign*self.h5['%s/y_shifts'%k][:]
-            goodnesses = np.squeeze(goodnesses)
+
             xshifts = np.squeeze(xshifts)
             yshifts = np.squeeze(yshifts)
-            
+
             xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
 
             yshifts = yshifts + np.arange(self.n_slow)
             
             valid = np.where(goodnesses>=goodness_threshold)[0]
-            
+
             if len(valid):
                 xshifts = xshifts[valid]
                 yshifts = yshifts[valid]
@@ -215,73 +219,103 @@ class Series:
         print 'sum size:',sum_image.shape
         fig = plt.figure()
 
-        test_corr = True
+
+        all_corr_coefs = []
         
         for k in keys:
             goodnesses = self.h5['%s/goodnesses'%k][:]
             xshifts = sign*self.h5['%s/x_shifts'%k][:]
             yshifts = sign*self.h5['%s/y_shifts'%k][:]
+            xshifts = np.squeeze(xshifts)
+            yshifts = np.squeeze(yshifts)
 
             xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
 
             valid = np.where(goodnesses>=goodness_threshold)[0]
 
             im = self.get_image_tag(k)
-            if len(valid):
-                #xshifts = xshifts[valid]
-                #yshifts = yshifts[valid]
 
-                print len(xshifts),len(yshifts)
-                print valid
-                
-                for v in valid:
-                    line = im[v,fastmin:fastmax]
-                    line = np.expand_dims(line,0)
-                    block = imresize(line,int(oversample_factor*100),interp='nearest')
-                    bsy,bsx = block.shape
-                    x1 = np.round(xshifts[v]*oversample_factor-xoffset)
-                    y1 = v*oversample_factor+np.round(yshifts[v]*oversample_factor-yoffset)
-                    x2 = x1+bsx
-                    y2 = y1+bsy
+            if (not any(xshifts)) and (not any(yshifts)):
+                block = imresize(im,int(oversample_factor*100),interp='nearest')
+                bsy,bsx = block.shape
+                x1 = -xoffset
+                y1 = -yoffset
+                x2 = x1+bsx
+                y2 = y1+bsy
+                sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
+                counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
 
-                    if test_corr:
+            else:
+
+                if len(valid):
+                    for v in valid:
+                        print k,v
+                        line = im[v,fastmin:fastmax]
+                        line = np.expand_dims(line,0)
+                        block = imresize(line,int(oversample_factor*100),interp='bilinear')
+                        bsy,bsx = block.shape
+                        x1 = np.round(xshifts[v]*oversample_factor-xoffset)
+                        y1 = v*oversample_factor+np.round(yshifts[v]*oversample_factor-yoffset)
+                        x2 = x1+bsx
+                        y2 = y1+bsy
+
                         im1 = sum_image[y1:y2,x1:x2].ravel()
                         if np.min(im1)==np.max(im1):
                             corr = 1.0
                         else:
-                            valid = np.where(im1)[0]
-                            corr = np.corrcoef(im1[valid],block.ravel()[valid])[1,0]
-                        print corr
-                    
-                    sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
-                    counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
-                    temp = counter_image.copy()
-                    temp[np.where(temp==0)] = 1.0
-                    av = sum_image/temp
-                    
-                    plt.clf()
-                    plt.subplot(1,2,1)
-                    plt.cla()
-                    plt.imshow(av,cmap='gray',clim=np.percentile(av,(5,99.5)))
-                    plt.colorbar()
-                    plt.subplot(1,2,2)
-                    plt.cla()
-                    plt.imshow(counter_image)
-                    plt.colorbar()
-                    plt.pause(.0000000001)
+                            corr_valid = np.where(im1)[0]
+                            corr = np.corrcoef(im1[corr_valid],block.ravel()[corr_valid])[1,0]
+                        all_corr_coefs.append(corr)
 
+                        if corr>correlation_threshold:
+                            sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
+                            counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
+
+            if do_plot:
+                temp = counter_image.copy()
+                temp[np.where(temp==0)] = 1.0
+                av = sum_image/temp
+                plt.clf()
+                plt.axes([0,0,.6,1.0])
+                plt.cla()
+                plt.imshow(av,cmap='gray',clim=np.percentile(av,(1,99.5)),interpolation='none')
+                #plt.colorbar()
+                plt.axes([.6,.5,.4,.4])
+                plt.cla()
+                plt.imshow(counter_image)
+                plt.axes([.7,.1,.25,.35])
+                plt.cla()
+                try:
+                    plt.hist(all_corr_coefs,100)
+                except:
+                    pass
+                #plt.colorbar()
+                plt.pause(.0000000001)
+
+
+        plt.figure()
+        plt.subplot(1,3,1)
+        plt.imshow(ref_oversampled,cmap='gray',clim=np.percentile(ref_oversampled,(1,99.5)),interpolation='none')
+        temp = counter_image.copy()
+        temp[np.where(temp==0)] = 1.0
+        av = sum_image/temp
+        plt.subplot(1,3,2)
+        plt.imshow(av,cmap='gray',clim=np.percentile(av,(5,99.5)),interpolation='none')
+        plt.subplot(1,3,3)
+        plt.imshow(counter_image)
+        plt.colorbar()
+
+        plt.savefig('%s_rendered.png'%self.reference_tag,dpi=300)
         plt.show()
-                    
-                
-            
-        sys.exit()
-
+        
 
     def filter_registration(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
+
         
         xvalid = np.abs(xshifts - np.median(xshifts))<=xmax
         yvalid = np.abs(yshifts - np.median(yshifts))<=ymax
         invalid = np.logical_or(1-xvalid,1-yvalid)
+
 
         # for xv,yv,iv in zip(xvalid,yvalid,invalid):
         #     print xv,yv,iv
@@ -293,10 +327,7 @@ class Series:
         # plt.show()
         # sys.exit()
 
-        print goodnesses.shape
-        print invalid.shape
-        if np.any(invalid):
-            goodnesses[invalid] = -np.inf
+        goodnesses[invalid] = -np.inf
 
         return xshifts,yshifts,goodnesses
         
