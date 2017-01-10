@@ -701,16 +701,20 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
 
 
     use_gaussian = True
-    # y = np.arange(sy)-float(sy)/2.0
-    # if use_gaussian:
-    #     g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
-    #     g = g/np.max(g)
-    # else:
-    #     g = np.zeros(y.shape)
-    #     g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
+    y = np.arange(sy)-float(sy)/2.0
+    if use_gaussian:
+        g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
+        g = g/np.max(g)
+    else:
+        g = np.zeros(y.shape)
+        g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
 
-    # correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
+    
+        
+    correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
     # print correlation_factor
+
+
     
     for iy in range(sy):
 
@@ -729,8 +733,8 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
             g = np.zeros(y.shape)
             g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
         
-        #correlation_factor = np.sum(np.ones(g.shape))/np.sum(g)
-        correlation_factor = 1.0
+        #correlation_factor = np.sum(np.ones(g.shape))/np.sum(g)/2.0
+        #correlation_factor = 1.0
         #print correlation_factor
         #continue
         
@@ -741,51 +745,84 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         f0 = np.fft.fft2(temp_tar)
         num = f0*f1c
 
+        # original:
+        #num = np.abs(np.fft.ifft2(num,s=(Ny,Nx)))
 
-        num = np.abs(np.fft.ifft2(num,s=(Ny,Nx)))
+        # fftshifted:
+        num = np.abs(np.fft.ifft2(np.fft.fftshift(num),s=(Ny,Nx)))
+
+        
         tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
         denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
         
         goodness = np.max(num)/denom*correlation_factor
-        
+
         centered_ir = np.fft.fftshift(num)
 
-        #centered_ir = centered_ir - np.mean(centered_ir,axis=1)
+        centered_ir = (centered_ir.T - np.mean(centered_ir,axis=1)).T
         
         cpeaky,cpeakx = np.where(centered_ir==np.max(centered_ir))
-        xx = XX - cpeakx
-        yy = YY - cpeaky
-        d = np.sqrt(xx**2+yy**2)
-        mask = np.zeros(d.shape)
-        mask[np.where(d<=oversample_factor)] = 1.0
+        centroid = False
+        if centroid:
+            xx = XX - cpeakx
+            yy = YY - cpeaky
+            d = np.sqrt(xx**2+yy**2)
+            mask = np.zeros(d.shape)
+            mask[np.where(d<=oversample_factor)] = 1.0
 
-        centroidable = centered_ir*mask
-        peakx = np.sum(centroidable*XX)/np.sum(centroidable)
-        peaky = np.sum(centroidable*YY)/np.sum(centroidable)
+            centroidable = centered_ir*mask
+            peakx = np.sum(centroidable*XX)/np.sum(centroidable)
+            peaky = np.sum(centroidable*YY)/np.sum(centroidable)
+
+        else:
+            peakx = cpeakx
+            peaky = cpeaky
 
         peakx = peakx - Nx // 2
         peaky = peaky - Ny // 2
 
+        # plt.figure()
+        # plt.imshow(tar)
+        # plt.colorbar()
+        # plt.figure()
+        # plt.imshow(ref)
+        # plt.colorbar()
+        # plt.figure()
+        # plt.imshow(ref-tar)
+        # plt.colorbar()
+        # plt.show()
+        # print peaky[0],iy
+        # print tar.shape
+        # print ref.shape
+        # tarline = tar[iy-peaky[0],:]
+        # refline = ref[iy,:]
+        # plt.plot(tarline)
+        # plt.plot(refline)
+        # plt.show()
+        
         y_peaks.append(peaky/oversample_factor)
         x_peaks.append(peakx/oversample_factor)
         goodnesses.append(goodness)
-
+        half_window = 20
         if do_plot:
             plt.clf()
             plt.subplot(2,2,1)
             plt.cla()
-            plt.imshow((centered_ir/denom*correlation_factor)**4,cmap='gray',interpolation='none')
+            plt.imshow((centered_ir/denom*correlation_factor)**2,cmap='gray',interpolation='none')
             plt.colorbar()
             plt.subplot(2,2,2)
             plt.cla()
-            plt.plot(x_peaks)
-            plt.plot(y_peaks)
+            plt.plot(x_peaks,label='x')
+            plt.plot(y_peaks,label='y')
+            plt.legend()
             plt.subplot(2,2,3)
-            plt.plot(goodnesses)
             plt.cla()
+            plt.plot(goodnesses)
             plt.subplot(2,2,4)
             plt.cla()
-            plt.plot(np.mean(centered_ir,axis=1))
+            
+            plt.imshow(centered_ir[peaky+Ny//2-half_window:peaky+Ny//2+half_window,peakx+Nx//2-half_window:peakx+Nx//2+half_window],cmap='gray',interpolation='none')
+            plt.colorbar()
 
 
             plt.pause(.1)
