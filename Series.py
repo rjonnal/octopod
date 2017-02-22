@@ -53,6 +53,14 @@ class Series:
             self.h5.put('/%s/y_shifts'%self.reference_tag,np.zeros(self.n_slow))
             self.h5.put('/%s/goodnesses'%self.reference_tag,np.ones(self.n_slow))
             self.h5.put('/%s/reference'%self.reference_tag,[1])
+        else:
+            # in an earlier version, the y vector was written as arange(n_slow),
+            # which was stupid. check to make sure this isn't the case, and if
+            # so, replace with zeros:
+            test = self.h5.get('/%s/y_shifts'%self.reference_tag)[:]
+            if any(test):
+                print 'Fixing old y_shifts; replacing with all zeros'
+                self.h5.put('/%s/y_shifts'%self.reference_tag,np.zeros(self.n_slow))
 
         self.reference_vidx = vidx
         
