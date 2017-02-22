@@ -212,23 +212,15 @@ class Series:
 
         ref_oversampled = imresize(self.reference,int(round(oversample_factor*100)),interp='nearest')
 
-        print ref_oversampled.shape
         x1 = round(sign*xoffset)
         x2 = x1+ref_oversampled.shape[1]
         y1 = round(sign*yoffset)
         y2 = y1+ref_oversampled.shape[0]
-        print y1,y2,x1,x2
-
-        print sum_image.shape
-        #sum_image[y1:y2,x1:x2] = ref_oversampled
-        
-        print 'sum size:',sum_image.shape
         fig = plt.figure()
-
-
         all_corr_coefs = []
         
         for k in keys:
+            print k
             goodnesses = self.h5['%s/goodnesses'%k][:]
             xshifts = sign*self.h5['%s/x_shifts'%k][:]
             yshifts = sign*self.h5['%s/y_shifts'%k][:]
@@ -255,7 +247,6 @@ class Series:
 
                 if len(valid):
                     for v in valid:
-                        print k,v
                         line = im[v,fastmin:fastmax]
                         line = np.expand_dims(line,0)
                         block = imresize(line,int(oversample_factor*100),interp='bilinear')
