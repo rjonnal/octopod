@@ -714,8 +714,6 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
     correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
     # print correlation_factor
 
-
-    
     for iy in range(sy):
 
         pct_done = round(float(iy)/float(sy)*100)

@@ -50,7 +50,7 @@ class Series:
         if not self.h5.has(self.reference_tag):
             # write 0's and 1's for shifts and goodnesses, respectively, for the reference
             self.h5.put('/%s/x_shifts'%self.reference_tag,np.zeros(self.n_slow))
-            self.h5.put('/%s/y_shifts'%self.reference_tag,np.arange(self.n_slow))
+            self.h5.put('/%s/y_shifts'%self.reference_tag,np.zeros(self.n_slow))
             self.h5.put('/%s/goodnesses'%self.reference_tag,np.ones(self.n_slow))
             self.h5.put('/%s/reference'%self.reference_tag,[1])
 
