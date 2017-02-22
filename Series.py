@@ -15,6 +15,12 @@ class Series:
         self.reference_h5.catalog()
         self.layer_names = layer_names
 
+        self.n_vol = self.reference_h5.get('/config/n_vol').value
+        self.n_slow = self.reference_h5.get('/config/n_slow').value
+        self.n_fast = self.reference_h5.get('/config/n_fast').value
+
+        print self.n_vol,self.n_slow,self.n_fast
+        
         if vidx is None:
             # if the caller doesn't know which volume to use,
             # show all of them and then quit
@@ -279,10 +285,11 @@ class Series:
                 plt.axes([0,0,.6,1.0])
                 plt.cla()
                 plt.imshow(av,cmap='gray',clim=np.percentile(av,(1,99.5)),interpolation='none')
-                #plt.colorbar()
+                plt.colorbar()
                 plt.axes([.6,.5,.4,.4])
                 plt.cla()
                 plt.imshow(counter_image)
+                plt.colorbar()
                 plt.axes([.7,.1,.25,.35])
                 plt.cla()
                 try:
