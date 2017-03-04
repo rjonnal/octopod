@@ -676,15 +676,28 @@ def show2(im1,im2,func=lambda x: x,pause=False):
         
 def strip_register(target,reference,oversample_factor,strip_width,do_plot=False):
 
+
+    if do_plot:
+        plt.figure(figsize=(24,12))
+    
     sy,sx = target.shape
     sy2,sx2 = reference.shape
     #ir_stack = np.zeros((sy,sy,sx))
     
     assert sy==sy2 and sx==sx2
 
-    ref = np.abs((reference - np.mean(reference)))/np.std(reference)
-    tar = np.abs((target - np.mean(target)))/np.std(target)
+    # wtf? Why did I have the abs in here originally?
+    # ref = np.abs((reference - np.mean(reference)))/np.std(reference)
+    # tar = np.abs((target - np.mean(target)))/np.std(target)
                  
+    ref = (reference - np.mean(reference))/np.std(reference)
+    tar = (target - np.mean(target))/np.std(target)
+
+    def show(im):
+        plt.figure()
+        plt.imshow(im,interpolation='none',cmap='gray')
+        plt.colorbar()
+
     x_peaks = []
     y_peaks = []
     goodnesses = []
@@ -699,8 +712,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
     
     XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
 
-
-    use_gaussian = True
+    use_gaussian = False
     y = np.arange(sy)-float(sy)/2.0
     if use_gaussian:
         g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
@@ -709,8 +721,6 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         g = np.zeros(y.shape)
         g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
 
-    
-        
     correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
     # print correlation_factor
 
@@ -731,11 +741,6 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
             g = np.zeros(y.shape)
             g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
         
-        #correlation_factor = np.sum(np.ones(g.shape))/np.sum(g)/2.0
-        #correlation_factor = 1.0
-        #print correlation_factor
-        #continue
-        
         temp_tar = (tar.T*g).T
 
         factor = float(sy)/np.sum(g)
@@ -749,17 +754,22 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         # fftshifted:
         num = np.abs(np.fft.ifft2(np.fft.fftshift(num),s=(Ny,Nx)))
 
-        
         tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
         denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
-        
-        goodness = np.max(num)/denom*correlation_factor
 
-        centered_ir = np.fft.fftshift(num)
-
-        centered_ir = (centered_ir.T - np.mean(centered_ir,axis=1)).T
+        xc = num/denom
         
-        cpeaky,cpeakx = np.where(centered_ir==np.max(centered_ir))
+        goodness = np.max(xc)
+
+        centered_xc = np.fft.fftshift(xc)
+
+        centered_xc = (centered_xc.T - np.mean(centered_xc,axis=1)).T
+        
+        cpeaky,cpeakx = np.where(centered_xc==np.max(centered_xc))
+
+        cpeaky = float(cpeaky[0])
+        cpeakx = float(cpeakx[0])
+        
         centroid = False
         if centroid:
             xx = XX - cpeakx
@@ -768,7 +778,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
             mask = np.zeros(d.shape)
             mask[np.where(d<=oversample_factor)] = 1.0
 
-            centroidable = centered_ir*mask
+            centroidable = centered_xc*mask
             peakx = np.sum(centroidable*XX)/np.sum(centroidable)
             peaky = np.sum(centroidable*YY)/np.sum(centroidable)
 
@@ -804,28 +814,34 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         half_window = 20
         if do_plot:
             plt.clf()
-            plt.subplot(2,2,1)
+
+            plt.subplot(2,4,1)
             plt.cla()
-            plt.imshow((centered_ir/denom*correlation_factor)**2,cmap='gray',interpolation='none')
+            plt.imshow((centered_xc/denom*correlation_factor)**2,cmap='gray',interpolation='none')
             plt.colorbar()
-            plt.subplot(2,2,2)
+            plt.subplot(2,4,2)
             plt.cla()
             plt.plot(x_peaks,label='x')
             plt.plot(y_peaks,label='y')
             plt.legend()
-            plt.subplot(2,2,3)
+            plt.title('lags')
+            
+            plt.subplot(2,4,3)
             plt.cla()
             plt.plot(goodnesses)
-            plt.subplot(2,2,4)
+            plt.title('goodness')
+            plt.subplot(2,4,4)
             plt.cla()
             
-            plt.imshow(centered_ir[peaky+Ny//2-half_window:peaky+Ny//2+half_window,peakx+Nx//2-half_window:peakx+Nx//2+half_window],cmap='gray',interpolation='none')
+            plt.imshow(centered_xc[peaky+Ny//2-half_window:peaky+Ny//2+half_window,peakx+Nx//2-half_window:peakx+Nx//2+half_window],cmap='gray',interpolation='none',aspect='normal')
             plt.colorbar()
 
 
-            plt.pause(.1)
+            plt.pause(.0001)
         
-
+    if do_plot:
+        plt.close()
+            
     return y_peaks,x_peaks,goodnesses
 
 def graph_traverse_xcorr_stack(ir_stack):
