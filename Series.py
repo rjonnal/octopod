@@ -49,18 +49,18 @@ class Series:
 
         if not self.h5.has(self.reference_tag):
             # write 0's and 1's for shifts and goodnesses, respectively, for the reference
-            self.h5.put('/%s/x_shifts'%self.reference_tag,np.zeros(self.n_slow))
-            self.h5.put('/%s/y_shifts'%self.reference_tag,np.zeros(self.n_slow))
-            self.h5.put('/%s/goodnesses'%self.reference_tag,np.ones(self.n_slow))
-            self.h5.put('/%s/reference'%self.reference_tag,[1])
+            self.h5.put('/frames/%s/x_shifts'%self.reference_tag,np.zeros(self.n_slow))
+            self.h5.put('/frames/%s/y_shifts'%self.reference_tag,np.zeros(self.n_slow))
+            self.h5.put('/frames/%s/goodnesses'%self.reference_tag,np.ones(self.n_slow))
+            self.h5.put('/frames/%s/reference'%self.reference_tag,[1])
         else:
             # in an earlier version, the y vector was written as arange(n_slow),
             # which was stupid. check to make sure this isn't the case, and if
             # so, replace with zeros:
-            test = self.h5.get('/%s/y_shifts'%self.reference_tag)[:]
+            test = self.h5.get('/frames/%s/y_shifts'%self.reference_tag)[:]
             if any(test):
                 print 'Fixing old y_shifts; replacing with all zeros'
-                self.h5.put('/%s/y_shifts'%self.reference_tag,np.zeros(self.n_slow))
+                self.h5.put('/frames/%s/y_shifts'%self.reference_tag,np.zeros(self.n_slow))
 
         self.reference_vidx = vidx
         
@@ -95,10 +95,10 @@ class Series:
         reference = self.reference
         y,x,g = utils.strip_register(target[slowmin:slowmax,fastmin:fastmax],reference[slowmin:slowmax,fastmin:fastmax],oversample_factor,strip_width,do_plot=do_plot)
         
-        self.h5.put('/%s/x_shifts'%target_tag,x)
-        self.h5.put('/%s/y_shifts'%target_tag,y)
-        self.h5.put('/%s/goodnesses'%target_tag,g)
-        self.h5.put('/%s/reference'%target_tag,[0])
+        self.h5.put('/frames/%s/x_shifts'%target_tag,x)
+        self.h5.put('/frames/%s/y_shifts'%target_tag,y)
+        self.h5.put('/frames/%s/goodnesses'%target_tag,g)
+        self.h5.put('/frames/%s/reference'%target_tag,[0])
 
     def get_image(self,filename,vidx):
         target_h5 = H5(filename)
@@ -136,11 +136,11 @@ class Series:
         sys.exit('Are you sure you want to do this? You probably already fixed it!')
         keys = self.h5.keys()
         for k in keys:
-            yshifts = self.h5['%s/y_shifts'%k][:]
+            yshifts = self.h5['/frames/%s/y_shifts'%k][:]
             new_yshifts = yshifts - np.arange(self.n_slow)
-            self.h5.put('%s/y_shifts_with_offset'%k,yshifts)
-            del self.h5.h5['%s/y_shifts'%k]
-            self.h5.put('%s/y_shifts'%k,new_yshifts)
+            self.h5.put('/frames/%s/y_shifts_with_offset'%k,yshifts)
+            del self.h5.h5['/frames/%s/y_shifts'%k]
+            self.h5.put('/frames/%s/y_shifts'%k,new_yshifts)
         sys.exit()
 
     def render(self,goodness_threshold=None,correlation_threshold=None,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False,keylist=None,oversample_factor=5,do_plot=False):
@@ -163,7 +163,7 @@ class Series:
             fastmax = self.n_fast
 
         if keylist is None:
-            keys = self.h5.keys()
+            keys = self.h5['frames'].keys()
         else:
             keys = keylist
 
@@ -175,9 +175,9 @@ class Series:
         ymin = np.inf
         ymax = -np.inf
         for k in keys:
-            goodnesses = self.h5['%s/goodnesses'%k][:]
-            xshifts = sign*self.h5['%s/x_shifts'%k][:]
-            yshifts = sign*self.h5['%s/y_shifts'%k][:]
+            goodnesses = self.h5['/frames/%s/goodnesses'%k][:]
+            xshifts = sign*self.h5['/frames/%s/x_shifts'%k][:]
+            yshifts = sign*self.h5['/frames/%s/y_shifts'%k][:]
 
             xshifts = np.squeeze(xshifts)
             yshifts = np.squeeze(yshifts)
@@ -228,10 +228,9 @@ class Series:
         all_corr_coefs = []
         
         for k in keys:
-            print k
-            goodnesses = self.h5['%s/goodnesses'%k][:]
-            xshifts = sign*self.h5['%s/x_shifts'%k][:]
-            yshifts = sign*self.h5['%s/y_shifts'%k][:]
+            goodnesses = self.h5['/frames/%s/goodnesses'%k][:]
+            xshifts = sign*self.h5['/frames/%s/x_shifts'%k][:]
+            yshifts = sign*self.h5['/frames/%s/y_shifts'%k][:]
             xshifts = np.squeeze(xshifts)
             yshifts = np.squeeze(yshifts)
 
@@ -299,20 +298,30 @@ class Series:
                 plt.pause(.0000000001)
 
 
-        plt.figure()
-        plt.subplot(1,3,1)
-        plt.imshow(ref_oversampled,cmap='gray',clim=np.percentile(ref_oversampled,(1,99.5)),interpolation='none')
         temp = counter_image.copy()
         temp[np.where(temp==0)] = 1.0
         av = sum_image/temp
-        plt.subplot(1,3,2)
-        plt.imshow(av,cmap='gray',clim=np.percentile(av,(5,99.5)),interpolation='none')
-        plt.subplot(1,3,3)
-        plt.imshow(counter_image)
-        plt.colorbar()
+        
+        self.h5.put('/counter_image',counter_image)
+        self.h5.put('/average_image',av)
+        self.h5.put('/sum_image',sum_image)
 
-        plt.savefig('%s_rendered.png'%self.reference_tag,dpi=300)
-        plt.show()
+        if do_plot:
+            plt.close()
+
+            plt.figure()
+            plt.subplot(1,3,1)
+            plt.imshow(ref_oversampled,cmap='gray',clim=np.percentile(ref_oversampled,(1,99.5)),interpolation='none')
+
+            plt.subplot(1,3,2)
+            plt.imshow(av,cmap='gray',clim=np.percentile(av,(5,99.5)),interpolation='none')
+
+            plt.subplot(1,3,3)
+            plt.imshow(counter_image)
+            plt.colorbar()
+
+            plt.savefig('%s_rendered.png'%self.reference_tag,dpi=300)
+            plt.show()
         
 
     def filter_registration(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
