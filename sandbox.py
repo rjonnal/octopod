@@ -4,10 +4,10 @@ import sys,os
 
 
 
-if True:
+if False:
     # a simple model of finding a line in a matrix
     # we want to know the coordinates of tar in ref
-    
+    # in this version use no resampling
     yc = 20
     xc = -40
     width = 500
@@ -33,10 +33,6 @@ if True:
     joint_ac = np.sqrt(ref_ac.max())*np.sqrt(tar_ac.max())
     
     centered_xc = np.fft.fftshift(np.abs(np.fft.ifft2(ref_f*tar_fc))/joint_ac,axes=1)*np.sqrt(height)
-    plt.imshow(centered_xc,cmap='gray',interpolation='none')
-    plt.colorbar()
-    plt.show()
-    
     
     cpeaky,cpeakx = np.where(centered_xc==centered_xc.max())
     cpeaky = float(cpeaky[0])
@@ -44,7 +40,59 @@ if True:
     peakx = cpeakx - width // 2
     peaky = cpeaky
 
-    print peakx,peaky
+    print peakx,peaky,xc,yc
+    
+if True:
+    # a simple model of finding a line in a matrix
+    # we want to know the coordinates of tar in ref
+    # now with oversampling
+
+    oversample_factor = 2
+    
+    yc = 20
+    xc = 34
+    width = 532
+    height = 566
+    
+    ref = np.random.randn(height,width)
+    tar = np.random.randn(width)
+
+    if xc>0:
+        tar[:-xc] = ref[yc,xc:]
+    elif xc<0:
+        tar[-xc:] = ref[yc,:xc]
+    else:
+        tar = ref[yc,:]
+
+    tars = [tar]
+
+    # start cross-correlation:
+    sy,sx = ref.shape
+    Ny = sy * oversample_factor
+    Nx = sx * oversample_factor
+    
+    ref_f = np.fft.fft2(ref)
+    ref_fc = ref_f.conjugate()
+    ref_ac = np.abs(np.fft.ifft2(ref_f*ref_fc))
+
+    for tar in tars:
+        tar_f = np.fft.fft(tar)
+        tar_fc = tar_f.conjugate()
+        tar_ac = np.abs(np.fft.ifft(tar_f*tar_fc))
+
+        joint_ac = np.sqrt(ref_ac.max())*np.sqrt(tar_ac.max())
+    
+        centered_xc = np.fft.fftshift(np.abs(np.fft.ifft2(ref_f*tar_fc,s=(Ny,Nx)))/joint_ac,axes=1)*np.sqrt(sy)*oversample_factor**2
+        xc_max = centered_xc.max()
+        
+        cpeaky,cpeakx = np.where(centered_xc==xc_max)
+        cpeaky = float(cpeaky[0])
+        cpeakx = float(cpeakx[0])
+
+        peakx = (cpeakx - Nx // 2) / oversample_factor
+        peaky = cpeaky / oversample_factor
+        
+        print peakx,peaky,xc,yc,xc_max
     
                    
 

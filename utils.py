@@ -673,9 +673,111 @@ def show2(im1,im2,func=lambda x: x,pause=False):
         plt.pause(.1)
     else:
         plt.show()
+
+
+def strip_register0(target,reference,oversample_factor,strip_width,do_plot=False):
+    
+    if do_plot:
+        plt.figure(figsize=(24,12))
+    
+    sy,sx = target.shape
+    sy2,sx2 = reference.shape
+    #ir_stack = np.zeros((sy,sy,sx))
+    
+    assert sy==sy2 and sx==sx2
+
+    # convolve the target with a gaussian, vertically
+    tarf = np.fft.fft(target,axis=0)
+    y = np.arange(sy)
+    y = y - np.mean(y)
+    g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
+    g = np.tile(g,(64,1)).T
+    gf = np.fft.fft(g,axis=0)
+    tarf = tarf*gf
+    target = np.fft.fftshift(np.abs(np.fft.ifft(tarf,axis=0)),axes=0)
+
+
+    
+    ref = (reference - np.mean(reference))/np.std(reference)
+    full_tar = (target - np.mean(target))/np.std(target)
+
+    
+    x_peaks = []
+    y_peaks = []
+    goodnesses = []
+
+
+    Ny = sy * oversample_factor
+    Nx = sx * oversample_factor
+    
+    ref_f = np.fft.fft2(ref)
+    ref_fc = ref_f.conjugate()
+    ref_ac = np.abs(np.fft.ifft2(ref_f*ref_fc))
+    ref_ac_max = ref_ac.max()
+
+    for iy in range(sy):
+
+        pct_done = round(float(iy)/float(sy)*100)
+        if pct_done%10==0:
+            print '%d percent done.'%pct_done
+
+        tar = full_tar[iy,:]
+
+        tar_f = np.fft.fft(tar)
+        tar_fc = tar_f.conjugate()
+        tar_ac = np.abs(np.fft.ifft(tar_f*tar_fc))
+
+        joint_ac = np.sqrt(ref_ac_max)*np.sqrt(tar_ac.max())
+    
+        centered_xc = np.fft.fftshift(np.abs(np.fft.ifft2(np.fft.fftshift(ref_f*tar_fc),s=(Ny,Nx)))/joint_ac,axes=1)*np.sqrt(sy)*oversample_factor**2
+        xc_max = centered_xc.max()
+        
+        cpeaky,cpeakx = np.where(centered_xc==xc_max)
+        cpeaky = float(cpeaky[0])
+        cpeakx = float(cpeakx[0])
+
+        peakx = (cpeakx - Nx // 2) / oversample_factor
+        peaky = cpeaky / oversample_factor
+
+        y_peaks.append(peaky)
+        x_peaks.append(peakx)
+        goodnesses.append(xc_max)
+
+        half_window = 20
+        if do_plot:
+            plt.clf()
+
+            plt.subplot(2,4,1)
+            plt.cla()
+            plt.imshow(centered_xc**2,cmap='gray',interpolation='none')
+            plt.colorbar()
+            plt.subplot(2,4,2)
+            plt.cla()
+            plt.plot(x_peaks,label='x')
+            plt.plot(y_peaks,label='y')
+            plt.legend()
+            plt.title('lags')
+            
+            plt.subplot(2,4,3)
+            plt.cla()
+            plt.plot(goodnesses)
+            plt.title('goodness')
+            plt.subplot(2,4,4)
+            plt.cla()
+            
+            plt.imshow(centered_xc[peaky+Ny//2-half_window:peaky+Ny//2+half_window,peakx+Nx//2-half_window:peakx+Nx//2+half_window],cmap='gray',interpolation='none',aspect='normal')
+            plt.colorbar()
+
+
+            plt.pause(.0001)
+        
+    if do_plot:
+        plt.close()
+            
+    return y_peaks,x_peaks,goodnesses
+    
         
 def strip_register(target,reference,oversample_factor,strip_width,do_plot=False):
-
 
     if do_plot:
         plt.figure(figsize=(24,12))
@@ -708,21 +810,23 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
     Ny = sy*oversample_factor
     Nx = sx*oversample_factor
 
-    ref_autocorr_max = np.max(np.abs(np.fft.ifft2(f1*f1c,s=(Ny,Nx))))
+    ###ref_autocorr_max = np.max(np.abs(np.fft.ifft2(f1*f1c,s=(Ny,Nx))))
+    ref_autocorr_max = np.max(np.abs(np.fft.ifft2(f1*f1c)))
     
     XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
+    use_gaussian = True
 
-    use_gaussian = False
-    y = np.arange(sy)-float(sy)/2.0
-    if use_gaussian:
-        g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
-        g = g/np.max(g)
-    else:
-        g = np.zeros(y.shape)
-        g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
+    if False:
+        y = np.arange(sy)-float(sy)/2.0
+        if use_gaussian:
+            g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
+            g = g/np.max(g)
+        else:
+            g = np.zeros(y.shape)
+            g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
 
-    correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
-    # print correlation_factor
+        correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
+        # print correlation_factor
 
     for iy in range(sy):
 
@@ -739,8 +843,9 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
             g = g/np.max(g)
         else:
             g = np.zeros(y.shape)
-            g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
-        
+            #g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
+            g[iy] = 1.0
+
         temp_tar = (tar.T*g).T
 
         factor = float(sy)/np.sum(g)
@@ -756,35 +861,20 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
 
         tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
         denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
-
-        xc = num/denom
+        xc = num/denom*np.sqrt(sy)*oversample_factor
+        
         
         goodness = np.max(xc)
-
         centered_xc = np.fft.fftshift(xc)
-
         centered_xc = (centered_xc.T - np.mean(centered_xc,axis=1)).T
-        
-        cpeaky,cpeakx = np.where(centered_xc==np.max(centered_xc))
 
+        cpeaky,cpeakx = np.where(centered_xc==np.max(centered_xc))
+        
         cpeaky = float(cpeaky[0])
         cpeakx = float(cpeakx[0])
         
-        centroid = False
-        if centroid:
-            xx = XX - cpeakx
-            yy = YY - cpeaky
-            d = np.sqrt(xx**2+yy**2)
-            mask = np.zeros(d.shape)
-            mask[np.where(d<=oversample_factor)] = 1.0
-
-            centroidable = centered_xc*mask
-            peakx = np.sum(centroidable*XX)/np.sum(centroidable)
-            peaky = np.sum(centroidable*YY)/np.sum(centroidable)
-
-        else:
-            peakx = cpeakx
-            peaky = cpeaky
+        peakx = cpeakx
+        peaky = cpeaky
 
         peakx = peakx - Nx // 2
         peaky = peaky - Ny // 2
@@ -817,7 +907,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
 
             plt.subplot(2,4,1)
             plt.cla()
-            plt.imshow((centered_xc/denom*correlation_factor)**2,cmap='gray',interpolation='none')
+            plt.imshow((centered_xc/denom)**2,cmap='gray',interpolation='none')
             plt.colorbar()
             plt.subplot(2,4,2)
             plt.cla()
@@ -836,7 +926,21 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
             plt.imshow(centered_xc[peaky+Ny//2-half_window:peaky+Ny//2+half_window,peakx+Nx//2-half_window:peakx+Nx//2+half_window],cmap='gray',interpolation='none',aspect='normal')
             plt.colorbar()
 
+            clim = (tar.min(),tar.max())
+            plt.subplot(2,4,5)
+            plt.cla()
+            plt.imshow(tar,cmap='gray',interpolation='none',aspect='normal',clim=clim)
 
+            plt.subplot(2,4,6)
+            plt.cla()
+            plt.imshow(temp_tar,cmap='gray',interpolation='none',aspect='normal',clim=clim)
+
+            plt.subplot(2,4,7)
+            plt.cla()
+            plt.imshow(ref,cmap='gray',interpolation='none',aspect='normal',clim=clim)
+
+
+            
             plt.pause(.0001)
         
     if do_plot:
