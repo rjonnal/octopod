@@ -28,6 +28,51 @@ class Clock:
         print '%s: %0.5f'%(label,time()-self.t0)
 
 
+def bilinear_interpolate(im,x_to,y_to,fill_mode='mean'):
+    x_to = np.array(x_to)
+    y_to = np.array(y_to)
+    immean = im.mean()
+    sy,sx = im.shape
+    xr = np.arange(sx)
+    yr = np.arange(sy)
+    
+    XX,YY = np.meshgrid(xr,yr)
+    input_image = np.ones((sy+1,sx+1))*np.nan
+    input_image[:sy,:sx] = im
+    output = []
+    for x,y in zip(x_to.ravel(),y_to.ravel()):
+
+        x1 = np.floor(x)
+        x2 = x1 + 1.0
+        y1 = np.floor(y)
+        y2 = y1 + 1.0
+
+        print 'point',x,y,'x bounds',x1,x2,'y bounds',y1,y2
+        if x1<0 or x2>sx or y1<0 or y2>sy:
+            output.append(fill_value)
+        else:
+        
+            dx1 = np.abs(x-x1)
+            dx2 = np.abs(x-x2)
+            dy1 = np.abs(y-y1)
+            dy2 = np.abs(y-y2)
+
+            p11 = input_image[int(y1),int(x1)]
+            p12 = input_image[int(y1),int(x2)]
+            p21 = input_image[int(y2),int(x1)]
+            p22 = input_image[int(y2),int(x2)]
+            out = (1.0-dy1)*(1.0-dx1)*p11 + (1.0-dy1)*(1.0-dx2)*p12 + (1.0-dy2)*(1.0-dx1)*p21 + (1.0-dy2)*(1.0-dx2)*p22
+            
+            output.append(out)
+        print
+    output = np.reshape(output,x_to.shape)
+    
+    if fill_mode=='mean':
+         output[np.where(np.isnan(output))] = im.mean()
+        
+    return output
+
+
 def scaleshow(im,dpi=50,clim=None):
     if clim is None:
         clim = (np.min(im),np.max(im))
@@ -675,7 +720,7 @@ def show2(im1,im2,func=lambda x: x,pause=False):
         plt.show()
 
 
-def strip_register0(target,reference,oversample_factor,strip_width,do_plot=False):
+def efficient_strip_register_testing(target,reference,oversample_factor,strip_width,do_plot=False):
     
     if do_plot:
         plt.figure(figsize=(24,12))
@@ -792,9 +837,15 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
     # ref = np.abs((reference - np.mean(reference)))/np.std(reference)
     # tar = np.abs((target - np.mean(target)))/np.std(target)
                  
-    ref = (reference - np.mean(reference))/np.std(reference)
-    tar = (target - np.mean(target))/np.std(target)
+    #ref = (reference - np.mean(reference))/np.std(reference)
+    #tar = (target - np.mean(target))/np.std(target)
 
+    ref = reference
+    tar = target
+
+    #ref = np.random.rand(ref.shape[0],ref.shape[1])
+    #tar = ref.copy()
+    
     def show(im):
         plt.figure()
         plt.imshow(im,interpolation='none',cmap='gray')
@@ -816,17 +867,6 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
     XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
     use_gaussian = True
 
-    if False:
-        y = np.arange(sy)-float(sy)/2.0
-        if use_gaussian:
-            g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
-            g = g/np.max(g)
-        else:
-            g = np.zeros(y.shape)
-            g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
-
-        correlation_factor = float(sy)/np.sum(np.ones(g.shape)*g)
-        # print correlation_factor
 
     for iy in range(sy):
 
@@ -839,12 +879,11 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         y = np.arange(sy)-float(iy)
 
         if use_gaussian:
-            g = np.exp((-y**2)/(2*float(strip_width)**2))/np.sqrt(2*strip_width**2*np.pi)
-            g = g/np.max(g)
+            g = np.exp((-y**2)/(2*float(strip_width)**2))#/np.sqrt(2*strip_width**2*np.pi)
         else:
             g = np.zeros(y.shape)
             #g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
-            g[iy] = 1.0
+            g[iy:iy+strip_width] = 1.0
 
         temp_tar = (tar.T*g).T
 
@@ -860,11 +899,15 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         num = np.abs(np.fft.ifft2(np.fft.fftshift(num),s=(Ny,Nx)))
 
         tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
+        
         denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
+        
         xc = num/denom*np.sqrt(sy)*oversample_factor
         
         
         goodness = np.max(xc)
+
+        
         centered_xc = np.fft.fftshift(xc)
         centered_xc = (centered_xc.T - np.mean(centered_xc,axis=1)).T
 
@@ -879,6 +922,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         peakx = peakx - Nx // 2
         peaky = peaky - Ny // 2
 
+        
         # plt.figure()
         # plt.imshow(tar)
         # plt.colorbar()
@@ -897,9 +941,14 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         # plt.plot(tarline)
         # plt.plot(refline)
         # plt.show()
+
+        peaky = peaky/oversample_factor
+        peakx = peakx/oversample_factor
         
-        y_peaks.append(peaky/oversample_factor)
-        x_peaks.append(peakx/oversample_factor)
+        y_peaks.append(peaky)
+        x_peaks.append(peakx)
+
+
         goodnesses.append(goodness)
         half_window = 20
         if do_plot:

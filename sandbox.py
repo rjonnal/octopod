@@ -3,6 +3,17 @@ from matplotlib import pyplot as plt
 import sys,os
 
 
+if True:
+
+    sy = 100
+    sx = 100
+
+    im = np.random.randn(sy,sx)
+
+    ac = np.abs(np.fft.ifft2(np.fft.fft2(im)*np.conj(np.fft.fft2(im))))
+    ac = np.abs(np.fft.ifft2(np.fft.fft2(im)*np.fft.fft2(im).conjugate()))
+    print ac.max()
+
 
 if False:
     # a simple model of finding a line in a matrix
@@ -42,7 +53,7 @@ if False:
 
     print peakx,peaky,xc,yc
     
-if True:
+if False:
     # a simple model of finding a line in a matrix
     # we want to know the coordinates of tar in ref
     # now with oversampling

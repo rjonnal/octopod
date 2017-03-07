@@ -105,7 +105,9 @@ class Series:
         stack = np.zeros((len(self.layer_names),self.n_slow,self.n_fast))
         for idx,layer_name in enumerate(self.layer_names):
             stack[idx,:,:] = target_h5['projections'][layer_name][vidx,:,:]
-        return np.mean(stack,axis=0)
+        
+        out = np.mean(stack,axis=0)
+        return out
 
     def get_image_tag(self,tag):
         fn,vidx = self.tag_to_filename_vidx(tag)
@@ -218,14 +220,20 @@ class Series:
         sum_image = np.zeros((height,width))
         counter_image = np.zeros((height,width))
 
+        print self.reference.max(),self.reference.min()
+        
         ref_oversampled = imresize(self.reference,int(round(oversample_factor*100)),interp='nearest')
 
+        print ref_oversampled.max(),ref_oversampled.min()
+        sys.exit()
+        
         x1 = round(sign*xoffset)
         x2 = x1+ref_oversampled.shape[1]
         y1 = round(sign*yoffset)
         y2 = y1+ref_oversampled.shape[0]
         fig = plt.figure()
         all_corr_coefs = []
+        ref_clim = np.percentile(self.reference,(1,99.5))
         
         for k in keys:
             goodnesses = self.h5['/frames/%s/goodnesses'%k][:]
@@ -279,10 +287,16 @@ class Series:
                 temp = counter_image.copy()
                 temp[np.where(temp==0)] = 1.0
                 av = sum_image/temp
+
+                
                 plt.clf()
-                plt.axes([0,0,.6,1.0])
+
+                plt.axes([0,.5,.6,.5])
                 plt.cla()
-                plt.imshow(av,cmap='gray',clim=np.percentile(av,(1,99.5)),interpolation='none')
+                plt.imshow(self.reference,cmap='gray',clim=ref_clim,interpolation='none')
+                plt.axes([0,0,.6,.5])
+                plt.cla()
+                plt.imshow(av,cmap='gray',clim=ref_clim,interpolation='none')
                 plt.colorbar()
                 plt.axes([.6,.5,.4,.4])
                 plt.cla()
@@ -310,13 +324,13 @@ class Series:
             plt.close()
 
             plt.figure()
-            plt.subplot(1,3,1)
+            plt.subplot(2,2,1)
             plt.imshow(ref_oversampled,cmap='gray',clim=np.percentile(ref_oversampled,(1,99.5)),interpolation='none')
 
-            plt.subplot(1,3,2)
+            plt.subplot(2,2,2)
             plt.imshow(av,cmap='gray',clim=np.percentile(av,(5,99.5)),interpolation='none')
 
-            plt.subplot(1,3,3)
+            plt.subplot(2,2,3)
             plt.imshow(counter_image)
             plt.colorbar()
 
