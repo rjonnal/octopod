@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 import sys,os
 from octopod import H5,utils
 import glob
-from scipy.misc import imresize
+from scipy.ndimage import zoom
 
 class Series:
 
@@ -220,12 +220,8 @@ class Series:
         sum_image = np.zeros((height,width))
         counter_image = np.zeros((height,width))
 
-        print self.reference.max(),self.reference.min()
-        
-        ref_oversampled = imresize(self.reference,int(round(oversample_factor*100)),interp='nearest')
+        ref_oversampled = zoom(self.reference,oversample_factor)
 
-        print ref_oversampled.max(),ref_oversampled.min()
-        sys.exit()
         
         x1 = round(sign*xoffset)
         x2 = x1+ref_oversampled.shape[1]
@@ -249,7 +245,7 @@ class Series:
             im = self.get_image_tag(k)
 
             if (not any(xshifts)) and (not any(yshifts)):
-                block = imresize(im,int(oversample_factor*100),interp='nearest')
+                block = zoom(im,oversample_factor)
                 bsy,bsx = block.shape
                 x1 = -xoffset
                 y1 = -yoffset
@@ -264,7 +260,7 @@ class Series:
                     for v in valid:
                         line = im[v,fastmin:fastmax]
                         line = np.expand_dims(line,0)
-                        block = imresize(line,int(oversample_factor*100),interp='bilinear')
+                        block = zoom(line,oversample_factor)
                         bsy,bsx = block.shape
                         x1 = np.round(xshifts[v]*oversample_factor-xoffset)
                         y1 = v*oversample_factor+np.round(yshifts[v]*oversample_factor-yoffset)
@@ -340,6 +336,14 @@ class Series:
 
     def filter_registration(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
 
+        plt.subplot(1,2,1)
+        plt.plot(xshifts)
+        plt.plot(yshifts)
+        plt.plot(goodnesses)
+        plt.subplot(1,2,2)
+        plt.plot(np.diff(xshifts))
+        plt.plot(np.diff(yshifts))
+        plt.show()
         
         xvalid = np.abs(xshifts - np.median(xshifts))<=xmax
         yvalid = np.abs(yshifts - np.median(yshifts))<=ymax
