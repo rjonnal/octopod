@@ -99,7 +99,8 @@ class Series:
         self.h5.put('/frames/%s/y_shifts'%target_tag,y)
         self.h5.put('/frames/%s/goodnesses'%target_tag,g)
         self.h5.put('/frames/%s/reference'%target_tag,[0])
-
+        self.h5.put('/frames/%s/oversample_factor'%target_tag,oversample_factor)
+        
     def get_image(self,filename,vidx):
         target_h5 = H5(filename)
         stack = np.zeros((len(self.layer_names),self.n_slow,self.n_fast))
