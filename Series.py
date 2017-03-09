@@ -253,7 +253,11 @@ class Series:
                 y2 = y1+bsy
                 sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                 counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
-
+                self.h5.put('/reference_coordinates/x1',x1)
+                self.h5.put('/reference_coordinates/x2',x2)
+                self.h5.put('/reference_coordinates/y1',y1)
+                self.h5.put('/reference_coordinates/y2',y2)
+                
             else:
 
                 if len(valid):
@@ -315,6 +319,7 @@ class Series:
         self.h5.put('/counter_image',counter_image)
         self.h5.put('/average_image',av)
         self.h5.put('/sum_image',sum_image)
+        
 
         if do_plot:
             plt.close()
@@ -336,14 +341,14 @@ class Series:
 
     def filter_registration(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
 
-        plt.subplot(1,2,1)
-        plt.plot(xshifts)
-        plt.plot(yshifts)
-        plt.plot(goodnesses)
-        plt.subplot(1,2,2)
-        plt.plot(np.diff(xshifts))
-        plt.plot(np.diff(yshifts))
-        plt.show()
+        #plt.subplot(1,2,1)
+        #plt.plot(xshifts)
+        #plt.plot(yshifts)
+        #plt.plot(goodnesses)
+        #plt.subplot(1,2,2)
+        #plt.plot(np.diff(xshifts))
+        #plt.plot(np.diff(yshifts))
+        #plt.show()
         
         xvalid = np.abs(xshifts - np.median(xshifts))<=xmax
         yvalid = np.abs(yshifts - np.median(yshifts))<=ymax
