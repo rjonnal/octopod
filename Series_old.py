@@ -7,13 +7,67 @@ from scipy.ndimage import zoom
 
 class Series:
 
-    def __init__(self,reference_frame,series_filename):
-        self.n_slow,self.n_fast = reference_frame.shape
-        self.reference = reference_frame
-        self.h5 = H5(series_filename)
-        self.h5.put('/reference_frame',reference_frame)
-        self.n_frames = 0
-        sys.exit()
+    def __init__(self,reference_h5_fn,vidx=None,layer_names=['ISOS','COST']):
+        self.tag_template = '%s_%03d'
+        self.reference_filename = reference_h5_fn
+        self.data_path = os.path.split(reference_h5_fn)[0]
+        self.reference_h5 = H5(reference_h5_fn,mode='r')
+        self.layer_names = layer_names
+
+        self.n_vol = self.reference_h5.get('/config/n_vol').value
+        self.n_slow = self.reference_h5.get('/config/n_slow').value
+        self.n_fast = self.reference_h5.get('/config/n_fast').value
+
+        print self.n_vol,self.n_slow,self.n_fast
+
+        reference_set = False
+        
+        if vidx is None:
+            # if the caller doesn't know which volume to use,
+            # show all of them and then quit
+            stack = np.zeros((self.n_vol,self.n_slow,self.n_fast))
+            for vidx in range(self.n_vol):
+                for layer_name in layer_names:
+                    stack[vidx,:,:] = stack[vidx,:,:]+self.reference_h5['projections'][layer_name][vidx,:,:]/float(len(layer_names))
+            clims = np.percentile(stack[:,50:-50,50:-50],(5,99))
+            for vidx in range(self.n_vol):
+                plt.figure()
+                test = stack[vidx,:,:]
+                plt.imshow(test,cmap='gray',interpolation='none',aspect='auto',clim=clims)
+                plt.colorbar()
+                plt.title('volume %d'%vidx)
+            plt.show()
+            sys.exit()
+        elif type(vidx==np.ndarray):
+            self.reference = vidx
+            self.reference_vidx = -1
+            reference_set = True
+                        
+
+
+        if reference_set:
+            # reference set with an external image
+            id_val = np.uint32(np.sum(vidx[:10])*1e6)%np.random.randint(1e6)
+        else:
+            id_val = vidx
+            
+        h5fn = self.tag_template%(self.reference_filename.replace('.hdf5',''),id_val)+'_series.hdf5'
+        self.h5 = H5(h5fn)
+
+        self.n_vol = self.reference_h5['config']['n_vol'].value
+        self.n_fast = self.reference_h5['config']['n_fast'].value
+        self.n_slow = self.reference_h5['config']['n_slow'].value
+
+        if not reference_set:
+            self.reference_vidx = vidx
+        
+            stack = np.zeros((len(layer_names),self.n_slow,self.n_fast))
+            for idx,layer_name in enumerate(self.layer_names):
+                stack[idx,:,:] = self.reference_h5['projections'][layer_name][self.reference_vidx,:,:]
+
+            self.reference = np.mean(stack,axis=0)
+            self.reference_h5.close()
+
 
     def add(self,filename,vidx,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False,oversample_factor=5,strip_width=3.0,do_plot=False):
         
@@ -61,6 +115,7 @@ class Series:
         im = self.get_image_tag(tag)
         self.imshow(im)
 
+
         
     def imshow(self,im,fig=None):
         if fig is None:
@@ -75,6 +130,18 @@ class Series:
 
     def close(self):
         self.h5.close()
+
+
+    def fix_yshifts(self):
+        sys.exit('Are you sure you want to do this? You probably already fixed it!')
+        keys = self.h5.keys()
+        for k in keys:
+            yshifts = self.h5['/frames/%s/y_shifts'%k][:]
+            new_yshifts = yshifts - np.arange(self.n_slow)
+            self.h5.put('/frames/%s/y_shifts_with_offset'%k,yshifts)
+            del self.h5.h5['/frames/%s/y_shifts'%k]
+            self.h5.put('/frames/%s/y_shifts'%k,new_yshifts)
+        sys.exit()
 
     def render(self,goodness_threshold=None,correlation_threshold=None,slowmin=None,slowmax=None,fastmin=None,fastmax=None,overwrite=False,keylist=None,oversample_factor=5,do_plot=False):
 
@@ -107,7 +174,6 @@ class Series:
         xmax = -np.inf
         ymin = np.inf
         ymax = -np.inf
-        
         for k in keys:
             goodnesses = self.h5['/frames/%s/goodnesses'%k][:]
             xshifts = sign*self.h5['/frames/%s/x_shifts'%k][:]
@@ -320,7 +386,7 @@ class Series:
     def tag_to_filename_vidx(self,k):
         last_underscore = k.rfind('_')
         fn = k[:last_underscore]+'.hdf5'
-        full_filename = os.path.join('.',fn)
+        full_filename = os.path.join(self.data_path,fn)
         vidx = int(k[last_underscore+1:])
         return full_filename,vidx
     
