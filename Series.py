@@ -7,15 +7,20 @@ from scipy.ndimage import zoom
 
 class Series:
 
-    def __init__(self,reference_frame,series_filename):
-        self.n_slow,self.n_fast = reference_frame.shape
-        self.reference = reference_frame
+    def __init__(self,series_filename,reference_frame=None):
         self.h5 = H5(series_filename)
-        self.h5.put('/reference_frame',reference_frame)
         self.n_frames = 0
         self.tag_template = '%s/%03d'
         self.series_filename = series_filename
         self.working_directory = os.path.split(series_filename)[0]
+        if not reference_frame is None:
+            self.reference = reference_frame
+            self.h5.put('/reference_frame',reference_frame)
+
+    def set_reference_frame(self,reference_frame):
+        self.reference = reference_frame
+        self.h5.put('/reference_frame',reference_frame)
+
         
     def add(self,filename,vidx,layer_names=['ISOS','COST'],overwrite=False,oversample_factor=5,strip_width=3.0,do_plot=False):
         
@@ -40,20 +45,50 @@ class Series:
     def get_image(self,filename_stub,vidx,layer_names):
         filename = os.path.join(self.working_directory,filename_stub)
         target_h5 = H5(filename)
-        stack = np.zeros((len(layer_names),self.n_slow,self.n_fast))
-        for idx,layer_name in enumerate(layer_names):
-            stack[idx,:,:] = target_h5['projections'][layer_name][vidx,:,:]
-        
-        out = np.mean(stack,axis=0)
+
+        if layer_names is None:
+            # if the layer_names list is missing, use the first layer as a default
+            # this seems like okay behavior since most times there's only one projection
+            # anyway
+            layer_names = [target_h5['projections'].keys()[0]]
+
+        if len(layer_names)>1:
+            test = target_h5['projections'][layer_names[0]][vidx,:,:]
+            n_slow,n_fast = test.shape
+            stack = np.zeros((len(layer_names),n_slow,n_fast))
+            for idx,layer_name in enumerate(layer_names):
+                stack[idx,:,:] = target_h5['projections'][layer_name][vidx,:,:]
+            out = np.mean(stack,axis=0)
+            del stack
+        else:
+            out = target_h5['projections'][layer_names[0]][vidx,:,:]    
         return out
 
-    def render(self,layer_names,goodness_threshold=None,correlation_threshold=None,overwrite=False,oversample_factor=5,do_plot=False):
+    def get_n_frames(self):
+        count = 0
+        try:
+            filenames = self.h5['/frames'].keys()
+            for filename in filenames:
+                count = count + len(self.h5['/frames/%s'%filename].keys())
+        except:
+            pass
+        return count
 
-        if goodness_threshold is None:
-            goodness_threshold = 0.0
 
-        if correlation_threshold is None:
-            correlation_threshold = 0.0
+    def is_rendered(self):
+        out = True
+        try:
+            test = self.h5['/sum_image']
+        except:
+            out = False
+
+        return out
+
+            
+
+    
+    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False):
+
 
         files = self.h5['frames'].keys()
         
@@ -68,6 +103,8 @@ class Series:
         for filename in files:
             keys = self.h5['/frames/%s'%filename].keys()
             for k in keys:
+                test = self.get_image(filename,0,None)
+                n_slow,n_fast = test.shape
                 goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
                 xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
                 yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
@@ -77,8 +114,10 @@ class Series:
 
                 xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
 
-                yshifts = yshifts + np.arange(self.n_slow)
+                yshifts = yshifts + np.arange(n_slow)
 
+                assert len(yshifts)==n_slow
+                
                 valid = np.where(goodnesses>=goodness_threshold)[0]
 
                 if len(valid):
@@ -100,7 +139,9 @@ class Series:
         xmax = np.round(xmax*oversample_factor)
         dx = xmax-xmin
         xoffset = xmin
-        width = self.n_fast*oversample_factor + dx
+
+        
+        width = n_fast*oversample_factor + dx
 
         ymin = np.round(ymin*oversample_factor)
         ymax = np.round(ymax*oversample_factor)
@@ -111,16 +152,19 @@ class Series:
         sum_image = np.zeros((height,width))
         counter_image = np.zeros((height,width))
 
-        ref_oversampled = zoom(self.reference,oversample_factor)
+        #ref_oversampled = zoom(self.reference,oversample_factor)
 
+
+        test_oversampled = zoom(test,oversample_factor)
+        sy_oversampled,sx_oversampled = test_oversampled.shape
         
         x1 = round(sign*xoffset)
-        x2 = x1+ref_oversampled.shape[1]
+        x2 = x1+sx_oversampled
         y1 = round(sign*yoffset)
-        y2 = y1+ref_oversampled.shape[0]
+        y2 = y1+sy_oversampled
         fig = plt.figure()
         all_corr_coefs = []
-        ref_clim = np.percentile(self.reference,(1,99.5))
+        #ref_clim = np.percentile(self.reference,(1,99.5))
 
 
         for filename in files:
@@ -187,19 +231,17 @@ class Series:
 
 
                     plt.clf()
+                    plt.subplot(1,3,1)
+                    plt.cla()
+                    clim = (np.median(av)-1*np.std(av),np.median(av)+1.75*np.std(av))
+                    plt.imshow(av,cmap='gray',clim=clim,interpolation='none')
 
-                    plt.axes([0,.5,.6,.5])
-                    plt.cla()
-                    plt.imshow(self.reference,cmap='gray',clim=ref_clim,interpolation='none')
-                    plt.axes([0,0,.6,.5])
-                    plt.cla()
-                    plt.imshow(av,cmap='gray',clim=ref_clim,interpolation='none')
-                    plt.colorbar()
-                    plt.axes([.6,.5,.4,.4])
+                    plt.subplot(1,3,2)
                     plt.cla()
                     plt.imshow(counter_image)
                     plt.colorbar()
-                    plt.axes([.7,.1,.25,.35])
+
+                    plt.subplot(1,3,3)
                     plt.cla()
                     try:
                         plt.hist(all_corr_coefs,100)
@@ -221,14 +263,10 @@ class Series:
         if do_plot:
             plt.close()
 
-            plt.figure()
-            plt.subplot(2,2,1)
-            plt.imshow(ref_oversampled,cmap='gray',clim=np.percentile(ref_oversampled,(1,99.5)),interpolation='none')
+            plt.subplot(1,2,1)
+            plt.imshow(av,cmap='gray',clim=clim,interpolation='none')
 
-            plt.subplot(2,2,2)
-            plt.imshow(av,cmap='gray',clim=np.percentile(av,(5,99.5)),interpolation='none')
-
-            plt.subplot(2,2,3)
+            plt.subplot(1,2,2)
             plt.imshow(counter_image)
             plt.colorbar()
 
