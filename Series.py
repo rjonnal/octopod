@@ -87,8 +87,13 @@ class Series:
             
 
     
-    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False):
+    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
 
+
+        if len(frames_to_save):
+            frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
+            if not os.path.exists(frames_directory):
+                os.makedirs(frames_directory)
 
         files = self.h5['frames'].keys()
         
@@ -167,11 +172,14 @@ class Series:
         #ref_clim = np.percentile(self.reference,(1,99.5))
 
 
+        frame_index = 0
         for filename in files:
 
             keys = self.h5['/frames/%s'%filename].keys()
-        
+            
             for k in keys:
+                current_sum_image = np.zeros((height,width))
+                current_counter_image = np.zeros((height,width))
                 goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
                 xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
                 yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
@@ -182,7 +190,6 @@ class Series:
 
                 valid = np.where(goodnesses>=goodness_threshold)[0]
 
-                
                 im = self.get_image(filename,int(k),layer_names)
 
                 if (not any(xshifts)) and (not any(yshifts)):
@@ -194,6 +201,8 @@ class Series:
                     y2 = y1+bsy
                     sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                     counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
+                    current_sum_image[y1:y2,x1:x2] = current_sum_image[y1:y2,x1:x2] + block
+                    current_counter_image[y1:y2,x1:x2] = current_counter_image[y1:y2,x1:x2] + 1.0
                     self.h5.put('/reference_coordinates/x1',x1)
                     self.h5.put('/reference_coordinates/x2',x2)
                     self.h5.put('/reference_coordinates/y1',y1)
@@ -223,6 +232,8 @@ class Series:
                             if corr>correlation_threshold:
                                 sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                                 counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
+                                current_sum_image[y1:y2,x1:x2] = current_sum_image[y1:y2,x1:x2] + block
+                                current_counter_image[y1:y2,x1:x2] = current_counter_image[y1:y2,x1:x2] + 1.0
 
                 if do_plot:
                     temp = counter_image.copy()
@@ -251,6 +262,14 @@ class Series:
                     plt.pause(.0000000001)
 
 
+                if frame_index in frames_to_save:
+                    outfn = os.path.join(frames_directory,'frame_%03d.npy'%frame_index)
+                    current_counter_image[np.where(current_counter_image==0)] = 1.0
+                    out = current_sum_image/current_counter_image
+                    print 'Saving frame to %s.'%outfn
+                    np.save(outfn,out)
+                frame_index = frame_index + 1
+            
         temp = counter_image.copy()
         temp[np.where(temp==0)] = 1.0
         av = sum_image/temp
