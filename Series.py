@@ -4,6 +4,8 @@ import sys,os
 from octopod import H5,utils
 import glob
 from scipy.ndimage import zoom
+from scipy.interpolate import griddata
+from scipy.signal import fftconvolve
 
 class Series:
 
@@ -21,8 +23,90 @@ class Series:
         self.reference = reference_frame
         self.h5.put('/reference_frame',reference_frame)
 
+
+
+    def correct_reference(self,kernel_size=10):
+        try:
+            si = self.h5['sum_image'][:,:]
+            ai = self.h5['average_image'][:,:]
+            ci = self.h5['counter_image'][:,:]
+
+            rx1 = self.h5['reference_coordinates/x1'].value
+            rx2 = self.h5['reference_coordinates/x2'].value
+            ry1 = self.h5['reference_coordinates/y1'].value
+            ry2 = self.h5['reference_coordinates/y2'].value
+        except Exception as e:
+            sys.exit('Has this Series been rendered? If not, do that first.')
+
+        sy,sx = si.shape
         
-    def add(self,filename,vidx,layer_names=['ISOS','COST'],overwrite=False,oversample_factor=5,strip_width=3.0,do_plot=False):
+        def hcentroid(im):
+            hidx = np.arange(im.shape[1])
+            return np.sum(im*hidx,axis=1)/np.sum(im,axis=1)
+    
+        hc = -hcentroid(ci[int(ry1):int(ry2),int(rx1):int(rx2)])
+        hc = (hc - np.mean(hc))
+
+
+        rsy = len(hc)
+        cut = rsy//20
+        hc[:cut] = hc.mean()
+        hc[-cut:] = hc.mean()
+        
+        def velocity_to_position(vec):
+            y = np.cumsum(vec)
+            x = np.arange(len(vec))
+            fit = np.polyfit(x,y,1)
+            yfit = np.polyval(fit,x)
+            return (y - yfit)/float(len(vec))
+
+
+        vprof = np.max(ci,axis=1)[ry1:ry2]
+        vc = velocity_to_position(vprof)
+        vc[:cut] = vc.mean()
+        vc[-cut:] = vc.mean()
+
+        comp = hc + vc*1j
+        comp = fftconvolve(comp,np.ones((cut)),mode='same')/float(cut)
+
+        hc = np.real(comp)
+        vc = np.imag(comp)
+        
+        reference = self.h5['reference_frame'][:,:]
+        original_sy,original_sx = reference.shape
+        # downsample the movement estimates:
+        for fk in self.h5['frames'].keys():
+            for idx in self.h5['frames'][fk].keys():
+                oversample_factor = self.h5['frames'][fk][idx]['oversample_factor'].value
+                break
+
+        hc = np.reshape(hc,(original_sy,int(oversample_factor))).mean(axis=1)
+        vc = np.reshape(vc,(original_sy,int(oversample_factor))).mean(axis=1)
+
+        to_XX,to_YY = np.meshgrid(np.arange(original_sx),np.arange(original_sy))
+
+        from_XX = (to_XX.T + hc).T
+        from_YY = (to_YY.T + vc).T
+
+        to_XX = to_XX.ravel()
+        to_YY = to_YY.ravel()
+        from_XX = from_XX.ravel()
+        from_YY = from_YY.ravel()
+
+        # use scipy.interpolate.griddata parlance for clarity
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+        points = np.vstack((from_XX,from_YY)).T
+        values = reference.ravel()
+
+        corrected_reference = griddata(points,values,(to_XX.ravel(),to_YY.ravel()),method='cubic')
+        corrected_reference = np.reshape(corrected_reference,reference.shape)
+
+        self.h5.put('/corrected/reference_frame',corrected_reference)
+        self.h5.put('/corrected/horizontal_correction',hc)
+        self.h5.put('/corrected/vertical_correction',vc)
+        
+        
+    def add(self,filename,vidx,layer_names=None,overwrite=False,oversample_factor=3,strip_width=3.0,do_plot=False):
         
         print 'Adding %s, volume %d.'%(filename,vidx)
         
@@ -87,8 +171,7 @@ class Series:
             
 
     
-    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
-
+    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[],corrected=False):
 
         if len(frames_to_save):
             frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
@@ -110,12 +193,20 @@ class Series:
             for k in keys:
                 test = self.get_image(filename,0,None)
                 n_slow,n_fast = test.shape
+
+                if corrected:
+                    hc = self.h5['/corrected/horizontal_correction'][:]
+                    vc = self.h5['/corrected/vertical_correction'][:]
+                else:
+                    hc = np.zeros(n_slow)
+                    vc = np.zeros(n_slow)
+                
                 goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
                 xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
                 yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
 
-                xshifts = np.squeeze(xshifts)
-                yshifts = np.squeeze(yshifts)
+                xshifts = np.squeeze(xshifts)+hc
+                yshifts = np.squeeze(yshifts)+vc
 
                 xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
 
@@ -144,7 +235,6 @@ class Series:
         xmax = np.round(xmax*oversample_factor)
         dx = xmax-xmin
         xoffset = xmin
-
         
         width = n_fast*oversample_factor + dx
 
@@ -158,7 +248,6 @@ class Series:
         counter_image = np.zeros((height,width))
 
         #ref_oversampled = zoom(self.reference,oversample_factor)
-
 
         test_oversampled = zoom(test,oversample_factor)
         sy_oversampled,sx_oversampled = test_oversampled.shape
@@ -183,8 +272,8 @@ class Series:
                 goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
                 xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
                 yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
-                xshifts = np.squeeze(xshifts)
-                yshifts = np.squeeze(yshifts)
+                xshifts = np.squeeze(xshifts)+hc
+                yshifts = np.squeeze(yshifts)+vc
 
                 xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
 
@@ -192,7 +281,7 @@ class Series:
 
                 im = self.get_image(filename,int(k),layer_names)
 
-                if (not any(xshifts)) and (not any(yshifts)):
+                if (not any(xshifts)) and (not any(yshifts)) and (not corrected):
                     block = zoom(im,oversample_factor)
                     bsy,bsx = block.shape
                     x1 = -xoffset
@@ -244,7 +333,7 @@ class Series:
                     plt.clf()
                     plt.subplot(1,3,1)
                     plt.cla()
-                    clim = (np.median(av)-1*np.std(av),np.median(av)+1.75*np.std(av))
+                    clim = (np.median(av)-2*np.std(av),np.median(av)+2*np.std(av))
                     plt.imshow(av,cmap='gray',clim=clim,interpolation='none')
 
                     plt.subplot(1,3,2)
@@ -263,7 +352,10 @@ class Series:
 
 
                 if frame_index in frames_to_save:
-                    outfn = os.path.join(frames_directory,'frame_%03d.npy'%frame_index)
+                    if corrected:
+                        outfn = os.path.join(frames_directory,'corrected_frame_%03d.npy'%frame_index)
+                    else:
+                        outfn = os.path.join(frames_directory,'frame_%03d.npy'%frame_index)
                     current_counter_image[np.where(current_counter_image==0)] = 1.0
                     out = current_sum_image/current_counter_image
                     print 'Saving frame to %s.'%outfn
@@ -273,10 +365,15 @@ class Series:
         temp = counter_image.copy()
         temp[np.where(temp==0)] = 1.0
         av = sum_image/temp
-        
-        self.h5.put('/counter_image',counter_image)
-        self.h5.put('/average_image',av)
-        self.h5.put('/sum_image',sum_image)
+
+        if corrected:
+            corrstr = '/corrected'
+        else:
+            corrstr = ''
+            
+        self.h5.put('%s/counter_image'%corrstr,counter_image)
+        self.h5.put('%s/average_image'%corrstr,av)
+        self.h5.put('%s/sum_image'%corrstr,sum_image)
         
 
         if do_plot:
@@ -289,7 +386,7 @@ class Series:
             plt.imshow(counter_image)
             plt.colorbar()
 
-            plt.savefig('%s_rendered.png'%(self.series_filename.replace('.hdf5','')),dpi=300)
+            plt.savefig('%s_%s_rendered.png'%(self.series_filename.replace('.hdf5',''),corrstr),dpi=300)
             plt.show()
         
 

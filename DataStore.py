@@ -7,6 +7,7 @@ import h5py
 import os,sys
 import shutil
 import logging
+import numpy as np
 logging.basicConfig(level='INFO')
 
 class DataStore:
@@ -122,21 +123,23 @@ class H5(DataStore):
     def keys(self):
         return self.h5.keys()
 
-    def print_helper(self,thing,depth=0):
+    def print_helper(self,thing,depth=0,max_depth=np.inf):
+        if depth>=max_depth:
+            return
         try:
             print thing.keys()
             for key in thing.keys():
                 try:
                     print '\t'*depth,key,':',
-                    self.print_helper(thing[key],depth+1)
+                    self.print_helper(thing[key],depth+1,max_depth)
                     #print
                 except:
                     pass
         except:
             print '(leaf)',thing.shape
 
-    def catalog(self):
-        self.print_helper(self.h5)
+    def catalog(self,max_depth=np.inf):
+        self.print_helper(self.h5,max_depth=max_depth)
 
     def has(self,key):
         out = True
