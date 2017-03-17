@@ -62,6 +62,11 @@ class Series:
 
 
         vprof = np.max(ci,axis=1)[ry1:ry2]
+
+        plt.plot(vprof)
+        plt.show()
+        sys.exit()
+        
         vc = velocity_to_position(vprof)
         vc[:cut] = vc.mean()
         vc[-cut:] = vc.mean()
@@ -125,6 +130,17 @@ class Series:
         self.h5.put('/frames/%s/goodnesses'%target_tag,g)
         self.h5.put('/frames/%s/reference'%target_tag,[0])
         self.h5.put('/frames/%s/oversample_factor'%target_tag,oversample_factor)
+
+    def is_registered(self):
+        counter = 0
+        try:
+            for filename in self.h5['/frames'].keys():
+                for fileindex in self.h5['/frames'][filename].keys():
+                    counter = counter + 1
+        except Exception as e:
+            print e
+        return counter
+                
         
     def get_image(self,filename_stub,vidx,layer_names):
         filename = os.path.join(self.working_directory,filename_stub)
@@ -169,8 +185,6 @@ class Series:
         return out
 
             
-
-    
     def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[],corrected=False):
 
         if len(frames_to_save):
@@ -244,13 +258,21 @@ class Series:
         yoffset = ymin
         height = oversample_factor + dy
 
-        sum_image = np.zeros((height,width))
-        counter_image = np.zeros((height,width))
-
-        #ref_oversampled = zoom(self.reference,oversample_factor)
-
         test_oversampled = zoom(test,oversample_factor)
         sy_oversampled,sx_oversampled = test_oversampled.shape
+
+        erx1 = -xoffset
+        ery1 = -yoffset
+        erx2 = erx1+sx_oversampled
+        ery2 = ery1+sy_oversampled
+        
+        embedded_reference = np.zeros((height,width))
+        ref_oversampled = zoom(self.reference,oversample_factor)
+        embedded_reference[ery1:ery2,erx1:erx2] = ref_oversampled
+
+        sum_image = np.zeros((height,width))
+        counter_image = np.zeros((height,width))
+        correlation_image = np.zeros((height,width))
         
         x1 = round(sign*xoffset)
         x2 = x1+sx_oversampled
@@ -290,6 +312,7 @@ class Series:
                     y2 = y1+bsy
                     sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                     counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
+                    correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + 1.0
                     current_sum_image[y1:y2,x1:x2] = current_sum_image[y1:y2,x1:x2] + block
                     current_counter_image[y1:y2,x1:x2] = current_counter_image[y1:y2,x1:x2] + 1.0
                     self.h5.put('/reference_coordinates/x1',x1)
@@ -310,14 +333,29 @@ class Series:
                             x2 = x1+bsx
                             y2 = y1+bsy
 
-                            im1 = sum_image[y1:y2,x1:x2].ravel()
-                            if np.min(im1)==np.max(im1):
-                                corr = 1.0
-                            else:
-                                corr_valid = np.where(im1)[0]
-                                corr = np.corrcoef(im1[corr_valid],block.ravel()[corr_valid])[1,0]
-                            all_corr_coefs.append(corr)
+                            
 
+                            # im1 = sum_image[y1:y2,x1:x2].ravel()
+                            # if np.min(im1)==np.max(im1) and False:
+                            #     corr = 1.0
+                            # else:
+                            #     corr_valid = np.where(im1)[0]
+                            #     a,b = im1[corr_valid],block.ravel()[corr_valid]
+                            #     corr = np.corrcoef(a,b)[1,0]
+                            #     plt.figure()
+                            #     plt.subplot(1,2,1)
+                            #     plt.plot(a)
+                            #     plt.subplot(1,2,2)
+                            #     plt.plot(b)
+                            #     plt.show()
+                            # all_corr_coefs.append(corr)
+
+                            correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + corr
+                            plt.figure(2)
+                            plt.clf()
+                            plt.imshow(correlation_image)
+                            plt.colorbar()
+                            plt.pause(.1)
                             if corr>correlation_threshold:
                                 sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                                 counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
