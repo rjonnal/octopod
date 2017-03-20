@@ -30,6 +30,9 @@ class Series:
             si = self.h5['sum_image'][:,:]
             ai = self.h5['average_image'][:,:]
             ci = self.h5['counter_image'][:,:]
+            eps = np.finfo(float).eps
+            ci = ci + eps
+            corri = self.h5['correlation_image'][:,:]
 
             rx1 = self.h5['reference_coordinates/x1'].value
             rx2 = self.h5['reference_coordinates/x2'].value
@@ -52,22 +55,33 @@ class Series:
         cut = rsy//20
         hc[:cut] = hc.mean()
         hc[-cut:] = hc.mean()
+
+        plt.figure()
+        plt.imshow(ai,cmap='gray',interpolation='none')
+        
         
         def velocity_to_position(vec):
             y = np.cumsum(vec)
             x = np.arange(len(vec))
             fit = np.polyfit(x,y,1)
             yfit = np.polyval(fit,x)
+            plt.figure()
+            plt.plot(vec)
+            #plt.plot(y)
+            #plt.plot(yfit)
+            plt.show()
             return (y - yfit)/float(len(vec))
 
 
+        corrprof = np.max(corri/ci,axis=1)[ry1:ry2]
         vprof = np.max(ci,axis=1)[ry1:ry2]
-
-        plt.plot(vprof)
+        vc = velocity_to_position(vprof)
+        #plt.plot(vprof)
+        plt.plot(vc)
+        #plt.plot(corrprof*100)
         plt.show()
         sys.exit()
         
-        vc = velocity_to_position(vprof)
         vc[:cut] = vc.mean()
         vc[-cut:] = vc.mean()
 
@@ -328,12 +342,10 @@ class Series:
                             line = np.expand_dims(line,0)
                             block = zoom(line,oversample_factor)
                             bsy,bsx = block.shape
-                            x1 = np.round(xshifts[v]*oversample_factor-xoffset)
-                            y1 = v*oversample_factor+np.round(yshifts[v]*oversample_factor-yoffset)
+                            x1 = int(np.round(xshifts[v]*oversample_factor-xoffset))
+                            y1 = int(v*oversample_factor+np.round(yshifts[v]*oversample_factor-yoffset))
                             x2 = x1+bsx
                             y2 = y1+bsy
-
-                            
 
                             # im1 = sum_image[y1:y2,x1:x2].ravel()
                             # if np.min(im1)==np.max(im1) and False:
@@ -350,12 +362,12 @@ class Series:
                             #     plt.show()
                             # all_corr_coefs.append(corr)
 
+                            ref_section = embedded_reference[y1:y2,x1:x2].ravel()
+                            corr_valid = np.where(ref_section)[0]
+                            a,b = ref_section[corr_valid],block.ravel()[corr_valid]
+                            corr = np.corrcoef(a,b)[1,0]
+
                             correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + corr
-                            plt.figure(2)
-                            plt.clf()
-                            plt.imshow(correlation_image)
-                            plt.colorbar()
-                            plt.pause(.1)
                             if corr>correlation_threshold:
                                 sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                                 counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
@@ -409,6 +421,7 @@ class Series:
         else:
             corrstr = ''
             
+        self.h5.put('%s/correlation_image'%corrstr,correlation_image)
         self.h5.put('%s/counter_image'%corrstr,counter_image)
         self.h5.put('%s/average_image'%corrstr,av)
         self.h5.put('%s/sum_image'%corrstr,sum_image)
