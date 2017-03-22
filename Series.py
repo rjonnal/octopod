@@ -329,13 +329,14 @@ class Series:
                     correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + 1.0
                     current_sum_image[y1:y2,x1:x2] = current_sum_image[y1:y2,x1:x2] + block
                     current_counter_image[y1:y2,x1:x2] = current_counter_image[y1:y2,x1:x2] + 1.0
+                    correlation_vector = np.ones(goodnesses.shape)
                     self.h5.put('/reference_coordinates/x1',x1)
                     self.h5.put('/reference_coordinates/x2',x2)
                     self.h5.put('/reference_coordinates/y1',y1)
                     self.h5.put('/reference_coordinates/y2',y2)
 
                 else:
-
+                    correlation_vector = np.ones(goodnesses.shape)*np.nan
                     if len(valid):
                         for v in valid:
                             line = im[v]
@@ -368,11 +369,14 @@ class Series:
                             corr = np.corrcoef(a,b)[1,0]
 
                             correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + corr
+                            correlation_vector[v] = corr
                             if corr>correlation_threshold:
                                 sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                                 counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
                                 current_sum_image[y1:y2,x1:x2] = current_sum_image[y1:y2,x1:x2] + block
                                 current_counter_image[y1:y2,x1:x2] = current_counter_image[y1:y2,x1:x2] + 1.0
+
+                self.h5.put('/frames/%s/%s/correlations'%(filename,k),correlation_vector)
 
                 if do_plot:
                     temp = counter_image.copy()
