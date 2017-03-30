@@ -56,31 +56,18 @@ class Series:
         hc[:cut] = hc.mean()
         hc[-cut:] = hc.mean()
 
-        plt.figure()
-        plt.imshow(ai,cmap='gray',interpolation='none')
-        
         
         def velocity_to_position(vec):
             y = np.cumsum(vec)
             x = np.arange(len(vec))
             fit = np.polyfit(x,y,1)
             yfit = np.polyval(fit,x)
-            plt.figure()
-            plt.plot(vec)
-            #plt.plot(y)
-            #plt.plot(yfit)
-            plt.show()
             return (y - yfit)/float(len(vec))
 
 
         corrprof = np.max(corri/ci,axis=1)[ry1:ry2]
         vprof = np.max(ci,axis=1)[ry1:ry2]
         vc = velocity_to_position(vprof)
-        #plt.plot(vprof)
-        plt.plot(vc)
-        #plt.plot(corrprof*100)
-        plt.show()
-        sys.exit()
         
         vc[:cut] = vc.mean()
         vc[-cut:] = vc.mean()
