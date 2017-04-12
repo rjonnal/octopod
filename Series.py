@@ -25,7 +25,7 @@ class Series:
 
 
 
-    def correct_reference(self,kernel_size=10):
+    def correct_reference_a(self,kernel_size=10,do_plot=False):
         try:
             si = self.h5['sum_image'][:,:]
             ai = self.h5['average_image'][:,:]
@@ -56,31 +56,18 @@ class Series:
         hc[:cut] = hc.mean()
         hc[-cut:] = hc.mean()
 
-        plt.figure()
-        plt.imshow(ai,cmap='gray',interpolation='none')
-        
         
         def velocity_to_position(vec):
             y = np.cumsum(vec)
             x = np.arange(len(vec))
             fit = np.polyfit(x,y,1)
             yfit = np.polyval(fit,x)
-            plt.figure()
-            plt.plot(vec)
-            #plt.plot(y)
-            #plt.plot(yfit)
-            plt.show()
             return (y - yfit)/float(len(vec))
 
 
         corrprof = np.max(corri/ci,axis=1)[ry1:ry2]
         vprof = np.max(ci,axis=1)[ry1:ry2]
         vc = velocity_to_position(vprof)
-        #plt.plot(vprof)
-        plt.plot(vc)
-        #plt.plot(corrprof*100)
-        plt.show()
-        sys.exit()
         
         vc[:cut] = vc.mean()
         vc[-cut:] = vc.mean()
@@ -119,10 +106,124 @@ class Series:
 
         corrected_reference = griddata(points,values,(to_XX.ravel(),to_YY.ravel()),method='cubic')
         corrected_reference = np.reshape(corrected_reference,reference.shape)
+        if do_plot:
+            clim = np.percentile(reference,(1,99.5))
+            plt.figure()
+            plt.subplot(1,2,1)
+            plt.imshow(reference,cmap='gray',interpolation='none',clim=clim)
+            plt.title('uncorrected')
+            plt.colorbar()
+            plt.subplot(1,2,2)
+            plt.imshow(corrected_reference,cmap='gray',interpolation='none',clim=clim)
+            plt.title('uncorrected')
+            plt.colorbar()
+            #plt.show()
 
-        self.h5.put('/corrected/reference_frame',corrected_reference)
-        self.h5.put('/corrected/horizontal_correction',hc)
-        self.h5.put('/corrected/vertical_correction',vc)
+
+        self.h5.put('/corrected_a/reference_frame',corrected_reference)
+        self.h5.put('/corrected_a/horizontal_correction',hc)
+        self.h5.put('/corrected_a/vertical_correction',vc)
+
+
+    def correct_reference_b(self,do_plot=False):
+
+        files = self.h5['frames'].keys()
+        frame_keys = []
+        for fn in files:
+                frames = self.h5['frames/%s'%fn].keys()
+                for f in frames:
+                    frame_keys.append('/frames/%s/%s'%(fn,f))
+
+        all_yshifts = []
+        all_xshifts = []
+        for fk in frame_keys:
+            ys = self.h5[fk]['y_shifts'][:]
+            all_yshifts.append(ys)
+            xs = self.h5[fk]['x_shifts'][:]
+            all_xshifts.append(xs)
+
+        all_yshifts = np.array(all_yshifts)
+        all_xshifts = np.array(all_xshifts)
+
+        # diff these:
+        # we do this to effectively remove outliers,
+        # since the line-to-line differences in x
+        # and y can be anticipated while the absolute
+        # positions cannot be (as well)
+        d_yshifts = np.diff(all_yshifts,axis=1)
+        d_xshifts = np.diff(all_xshifts,axis=1)
+
+        # keep track of the medians of the first columns,
+        # because we need these values to reconstruct
+        # the absolute positions with cumsum below
+        first_y = np.median(all_yshifts[:,0])
+        first_x = np.median(all_xshifts[:,0])
+
+        # remove outliers (replace with nans)
+        def outlier_to_nan(arr,ulim=5.0,llim=-5.0):
+            invalid = np.where(np.logical_or(arr>ulim,arr<llim))
+            arr[invalid] = np.nan
+            return arr
+
+        d_yshifts = outlier_to_nan(d_yshifts)
+        d_xshifts = outlier_to_nan(d_xshifts)
+
+        # now, nanmean these diffs to get the average
+        # lag biases; these will be integrated to get
+        # the eye position
+        d_y = np.nanmean(d_yshifts,axis=0)
+        d_x = np.nanmean(d_xshifts,axis=0)
+        d_y = np.array([first_y]+list(d_y))
+        d_x = np.array([first_x]+list(d_x))
+
+        vc = np.cumsum(d_y)
+        hc = np.cumsum(d_x)
+        
+        reference = self.h5['reference_frame'][:,:]
+        original_sy,original_sx = reference.shape
+        
+        # downsample the movement estimates:
+        for fk in self.h5['frames'].keys():
+            for idx in self.h5['frames'][fk].keys():
+                oversample_factor = self.h5['frames'][fk][idx]['oversample_factor'].value
+                break
+
+        to_XX,to_YY = np.meshgrid(np.arange(original_sx),np.arange(original_sy))
+
+        from_XX = (to_XX.T + hc).T
+        from_YY = (to_YY.T + vc).T
+
+        to_XX = to_XX.ravel()
+        to_YY = to_YY.ravel()
+        from_XX = from_XX.ravel()
+        from_YY = from_YY.ravel()
+
+        # use scipy.interpolate.griddata parlance for clarity
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+        points = np.vstack((from_XX,from_YY)).T
+        values = reference.ravel()
+
+        corrected_reference = griddata(points,values,(to_XX.ravel(),to_YY.ravel()),method='cubic')
+        corrected_reference = np.reshape(corrected_reference,reference.shape)
+
+        clim = np.percentile(reference,(1,99.5))
+        
+        if do_plot:
+            plt.figure()
+            plt.subplot(1,2,1)
+            plt.imshow(reference,cmap='gray',interpolation='none',clim=clim)
+            plt.title('uncorrected')
+            plt.colorbar()
+            plt.subplot(1,2,2)
+            plt.imshow(corrected_reference,cmap='gray',interpolation='none',clim=clim)
+            plt.title('uncorrected')
+            plt.colorbar()
+            #plt.show()
+
+        self.h5.put('/corrected_b/reference_frame',corrected_reference)
+        self.h5.put('/corrected_b/horizontal_correction',hc)
+        self.h5.put('/corrected_b/vertical_correction',vc)
+        
         
         
     def add(self,filename,vidx,layer_names=None,overwrite=False,oversample_factor=3,strip_width=3.0,do_plot=False):
