@@ -24,7 +24,6 @@ class Series:
         self.h5.put('/reference_frame',reference_frame)
 
 
-
     def correct_reference_a(self,kernel_size=10,do_plot=False):
         try:
             si = self.h5['sum_image'][:,:]
@@ -109,13 +108,12 @@ class Series:
         if do_plot:
             clim = np.percentile(reference,(1,99.5))
             plt.figure()
-            plt.subplot(1,2,1)
             plt.imshow(reference,cmap='gray',interpolation='none',clim=clim)
             plt.title('uncorrected')
             plt.colorbar()
-            plt.subplot(1,2,2)
+            plt.figure()
             plt.imshow(corrected_reference,cmap='gray',interpolation='none',clim=clim)
-            plt.title('uncorrected')
+            plt.title('corrected a')
             plt.colorbar()
             #plt.show()
 
@@ -210,13 +208,12 @@ class Series:
         
         if do_plot:
             plt.figure()
-            plt.subplot(1,2,1)
             plt.imshow(reference,cmap='gray',interpolation='none',clim=clim)
             plt.title('uncorrected')
             plt.colorbar()
-            plt.subplot(1,2,2)
+            plt.figure()
             plt.imshow(corrected_reference,cmap='gray',interpolation='none',clim=clim)
-            plt.title('uncorrected')
+            plt.title('corrected b')
             plt.colorbar()
             #plt.show()
 
@@ -300,6 +297,26 @@ class Series:
         return out
 
             
+    def is_corrected_a(self):
+        out = True
+        try:
+            test = self.h5['/corrected_a']
+        except:
+            out = False
+
+        return out
+
+    
+    def is_corrected_b(self):
+        out = True
+        try:
+            test = self.h5['/corrected_b']
+        except:
+            out = False
+
+        return out
+
+    
     def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[],corrected=False):
 
         if len(frames_to_save):

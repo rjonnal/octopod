@@ -863,6 +863,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
 
     ###ref_autocorr_max = np.max(np.abs(np.fft.ifft2(f1*f1c,s=(Ny,Nx))))
     ref_autocorr_max = np.max(np.abs(np.fft.ifft2(f1*f1c)))
+
     
     XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
     use_gaussian = True
@@ -901,13 +902,12 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
         
         denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
-        
+
         xc = num/denom*np.sqrt(sy)*oversample_factor
         
         
         goodness = np.max(xc)
 
-        
         centered_xc = np.fft.fftshift(xc)
         centered_xc = (centered_xc.T - np.mean(centered_xc,axis=1)).T
 
