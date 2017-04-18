@@ -824,6 +824,10 @@ def efficient_strip_register_testing(target,reference,oversample_factor,strip_wi
         
 def strip_register(target,reference,oversample_factor,strip_width,do_plot=False):
 
+    # this function returns the x and y shifts required to align lines in TARGET
+    # to REFERENCE, such that xshift -1 and yshift +2 for a given line means that
+    # it must be moved left one pixel and down two pixels to match REFERENCE
+    
     if do_plot:
         plt.figure(figsize=(24,12))
     

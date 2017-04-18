@@ -5,7 +5,7 @@ from octopod import H5,utils
 import glob
 from scipy.ndimage import zoom
 from scipy.interpolate import griddata
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve,medfilt
 
 class Series:
 
@@ -317,7 +317,7 @@ class Series:
         return out
 
     
-    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[],corrected=False):
+    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
 
         if len(frames_to_save):
             frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
@@ -328,7 +328,12 @@ class Series:
         
         sign = -1
             
-        # first, find the minimum and maximum x and y shifts
+        # remember the convention here: x and y shifts are the
+        # amount of shift required to align the line in question
+        # with the reference image
+        # first, find the minimum and maximum x and y shifts,
+        # in order to know how big the canvas must be for fitting
+        # all of the lines
         xmin = np.inf
         xmax = -np.inf
         ymin = np.inf
@@ -340,21 +345,14 @@ class Series:
                 test = self.get_image(filename,0,None)
                 n_slow,n_fast = test.shape
 
-                if corrected:
-                    hc = self.h5['/corrected/horizontal_correction'][:]
-                    vc = self.h5['/corrected/vertical_correction'][:]
-                else:
-                    hc = np.zeros(n_slow)
-                    vc = np.zeros(n_slow)
-                
                 goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
                 xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
                 yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
 
-                xshifts = np.squeeze(xshifts)+hc
-                yshifts = np.squeeze(yshifts)+vc
+                xshifts = np.squeeze(xshifts)
+                yshifts = np.squeeze(yshifts)
 
-                xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
+                xshifts,yshifts,goodnesses = self.filter_registration_2(xshifts,yshifts,goodnesses)
 
                 yshifts = yshifts + np.arange(n_slow)
 
@@ -363,8 +361,15 @@ class Series:
                 valid = np.where(goodnesses>=goodness_threshold)[0]
 
                 if len(valid):
+                    t = np.arange(len(xshifts))
                     xshifts = xshifts[valid]
                     yshifts = yshifts[valid]
+                    t = t[valid]
+                    plt.cla()
+                    plt.plot(t,xshifts)
+                    plt.plot(t,yshifts-t)
+                    plt.pause(.001)
+                
 
                     newxmin = np.min(xshifts)
                     newxmax = np.max(xshifts)
@@ -377,6 +382,9 @@ class Series:
                     ymax = max(ymax,newymax)
 
 
+
+        print ymin,ymax
+        sys.exit()
         xmin = np.round(xmin*oversample_factor)
         xmax = np.round(xmax*oversample_factor)
         dx = xmax-xmin
@@ -400,6 +408,11 @@ class Series:
         
         embedded_reference = np.zeros((height,width))
         ref_oversampled = zoom(self.reference,oversample_factor)
+
+        print embedded_reference.shape,ery1,ery2
+        print ref_oversampled.shape
+        sys.exit()
+        
         embedded_reference[ery1:ery2,erx1:erx2] = ref_oversampled
 
         sum_image = np.zeros((height,width))
@@ -565,30 +578,35 @@ class Series:
 
     def filter_registration(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
 
-        #plt.subplot(1,2,1)
-        #plt.plot(xshifts)
-        #plt.plot(yshifts)
-        #plt.plot(goodnesses)
-        #plt.subplot(1,2,2)
-        #plt.plot(np.diff(xshifts))
-        #plt.plot(np.diff(yshifts))
-        #plt.show()
-        
         xvalid = np.abs(xshifts - np.median(xshifts))<=xmax
         yvalid = np.abs(yshifts - np.median(yshifts))<=ymax
         invalid = np.logical_or(1-xvalid,1-yvalid)
+        goodnesses[invalid] = -np.inf
 
-
-        # for xv,yv,iv in zip(xvalid,yvalid,invalid):
-        #     print xv,yv,iv
-        # sys.exit()
+        return xshifts,yshifts,goodnesses
         
-        # plt.plot(xshifts)
-        # plt.plot(yshifts)
-        # plt.plot((goodnesses-np.mean(goodnesses))*10000)
-        # plt.show()
-        # sys.exit()
+    def filter_registration_2(self,xshifts,yshifts,goodnesses,xmax=3,ymax=3):
 
+        xmed = medfilt(xshifts,9)
+        ymed = medfilt(yshifts,9)
+        xerr = np.abs(xshifts-xmed)
+        yerr = np.abs(yshifts-ymed)
+
+
+        plt.subplot(1,2,1)
+        plt.plot(xshifts)
+        plt.plot(yshifts)
+        plt.plot(xmed)
+        plt.plot(ymed)
+        plt.subplot(1,2,2)
+        plt.plot(xerr)
+        plt.plot(yerr)
+        plt.show()
+        
+        xvalid = xerr<=xmax
+        yvalid = yerr<=ymax
+
+        invalid = np.logical_or(1-xvalid,1-yvalid)
         goodnesses[invalid] = -np.inf
 
         return xshifts,yshifts,goodnesses
