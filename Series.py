@@ -23,7 +23,6 @@ class Series:
         self.reference = reference_frame
         self.h5.put('/reference_frame',reference_frame)
 
-
     def correct_reference_a(self,kernel_size=10,do_plot=False):
         try:
             si = self.h5['sum_image'][:,:]
@@ -317,7 +316,7 @@ class Series:
         return out
 
     
-    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
+    def render_old(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
 
         if len(frames_to_save):
             frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
@@ -360,17 +359,19 @@ class Series:
                 
                 valid = np.where(goodnesses>=goodness_threshold)[0]
 
+                print len(valid)
+                
                 if len(valid):
                     t = np.arange(len(xshifts))
                     xshifts = xshifts[valid]
                     yshifts = yshifts[valid]
                     t = t[valid]
-                    plt.cla()
-                    plt.plot(t,xshifts)
-                    plt.plot(t,yshifts-t)
-                    plt.pause(.001)
-                
 
+                    #plt.figure()
+                    #plt.plot(t,xshifts)
+                    #plt.plot(t,yshifts-t)
+                    #plt.show()
+                
                     newxmin = np.min(xshifts)
                     newxmax = np.max(xshifts)
                     newymin = np.min(yshifts)
@@ -576,7 +577,198 @@ class Series:
             plt.show()
         
 
-    def filter_registration(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
+    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
+
+        if len(frames_to_save):
+            frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
+            if not os.path.exists(frames_directory):
+                os.makedirs(frames_directory)
+
+        files = self.h5['frames'].keys()
+        
+        sign = -1
+        # remember the convention here: x and y shifts are the
+        # amount of shift required to align the line in question
+        # with the reference image
+        # first, find the minimum and maximum x and y shifts,
+        # in order to know how big the canvas must be for fitting
+        # all of the lines
+        xmin = np.inf
+        xmax = -np.inf
+        ymin = np.inf
+        ymax = -np.inf
+
+        reg_dict = {}
+        
+        for filename in files:
+            keys = self.h5['/frames/%s'%filename].keys()
+            for k in keys:
+                test = self.get_image(filename,0,None)
+                n_slow,n_fast = test.shape
+
+                goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
+                xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
+                yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
+
+                xshifts = np.squeeze(xshifts)
+                yshifts = np.squeeze(yshifts)
+
+                xshifts,yshifts,goodnesses,valid = self.filter_registration(xshifts,yshifts,goodnesses)
+
+                newxmin = np.min(xshifts)
+                newxmax = np.max(xshifts)
+                newymin = np.min(yshifts)
+                newymax = np.max(yshifts)
+                
+                xmin = min(xmin,newxmin)
+                xmax = max(xmax,newxmax)
+                ymin = min(ymin,newymin)
+                ymax = max(ymax,newymax)
+
+                yshifts = yshifts + valid
+
+                reg_dict[(filename,k)] = (xshifts,yshifts,goodnesses,valid)
+
+
+        canvas_width = xmax-xmin+n_fast
+        canvas_height = ymax-ymin+n_slow
+
+        ref_x1 = 0 - xmin
+        ref_y1 = 0 - ymin
+        ref_x2 = ref_x1 + n_fast
+        ref_y2 = ref_y1 + n_slow
+        
+        self.h5.put('/reference_coordinates/x1',ref_x1)
+        self.h5.put('/reference_coordinates/x2',ref_x2)
+        self.h5.put('/reference_coordinates/y1',ref_y1)
+        self.h5.put('/reference_coordinates/y2',ref_y2)
+        
+        for key in reg_dict.keys():
+            xs,ys,g,v = reg_dict[key]
+            xs = xs - xmin
+            ys = ys - ymin
+            reg_dict[key] = (xs,ys,g,v)
+                
+
+        canvas_width = canvas_width*oversample_factor
+        canvas_height = (canvas_height+1)*oversample_factor
+
+        rmean = np.mean(self.reference)
+        embedded_reference = np.ones((canvas_height,canvas_width))*rmean
+        ref_x1 = ref_x1*oversample_factor
+        ref_x2 = ref_x2*oversample_factor
+        ref_y1 = ref_y1*oversample_factor
+        ref_y2 = ref_y2*oversample_factor
+        ref_oversampled = zoom(self.reference,oversample_factor)
+        embedded_reference[ref_y1:ref_y2,ref_x1:ref_x2] = ref_oversampled
+        
+        sum_image = np.zeros((canvas_height,canvas_width))
+        counter_image = np.zeros((canvas_height,canvas_width))
+        correlation_image = np.zeros((canvas_height,canvas_width))
+
+        for k in reg_dict.keys():
+            xshifts,yshifts,goodnesses,indices = reg_dict[k]
+            filename = k[0]
+            frame_index = int(k[1])
+            im = self.get_image(filename,frame_index,layer_names)
+            correlation_vector = np.zeros((n_slow))
+            
+            for idx,xs,ys,g in zip(indices,xshifts,yshifts,goodnesses):
+                line = im[idx,:]
+                line = np.expand_dims(line,0)
+                block = zoom(line,oversample_factor)
+                bsy,bsx = block.shape
+                x1 = int(np.round(xs*oversample_factor))
+                x2 = x1 + bsx
+                y1 = int(np.round(ys*oversample_factor))
+                y2 = y1 + bsy
+
+                ref_section = embedded_reference[y1:y2,x1:x2].ravel()
+                eref_std = np.std(ref_section)
+                if eref_std:
+                    corr = np.corrcoef(ref_section,block.ravel())[1,0]
+                else:
+                    corr = 1.0
+                correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + corr
+                correlation_vector[idx] = corr
+                if corr>correlation_threshold:
+                    sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
+                    counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
+            self.h5.put('/frames/%s/%s/correlations'%(filename,k[1]),correlation_vector)
+
+            if do_plot:
+                temp = counter_image.copy()
+                temp[np.where(temp==0)] = 1.0
+                av = sum_image/temp
+                plt.clf()
+                plt.subplot(1,3,1)
+                plt.cla()
+                clim = (np.median(av)-2*np.std(av),np.median(av)+2*np.std(av))
+                plt.imshow(av,cmap='gray',clim=clim,interpolation='none')
+
+                plt.subplot(1,3,2)
+                plt.cla()
+                plt.imshow(counter_image)
+                plt.colorbar()
+
+                plt.subplot(1,3,3)
+                plt.cla()
+                try:
+                    plt.hist(all_corr_coefs,100)
+                except:
+                    pass
+                #plt.colorbar()
+                plt.pause(.0000000001)
+
+            
+        temp = counter_image.copy()
+        temp[np.where(temp==0)] = 1.0
+        av = sum_image/temp
+
+        self.h5.put('/correlation_image',correlation_image)
+        self.h5.put('/counter_image',counter_image)
+        self.h5.put('/average_image',av)
+        self.h5.put('/sum_image',sum_image)
+        
+        if do_plot:
+            plt.close()
+
+            plt.subplot(1,2,1)
+            plt.imshow(av,cmap='gray',clim=clim,interpolation='none')
+
+            plt.subplot(1,2,2)
+            plt.imshow(counter_image)
+            plt.colorbar()
+
+            plt.savefig('%s_%s_rendered.png'%(self.series_filename.replace('.hdf5',''),corrstr),dpi=300)
+            plt.show()
+        
+            
+    def filter_registration(self,xshifts,yshifts,goodnesses,xmax=3,ymax=3,medfilt_region=19,do_plot=False):
+        xmed = medfilt(xshifts,medfilt_region)
+        ymed = medfilt(yshifts,medfilt_region)
+        xerr = np.abs(xshifts-xmed)
+        yerr = np.abs(yshifts-ymed)
+        xvalid = xerr<=xmax
+        yvalid = yerr<=ymax
+
+        valid = np.where(np.logical_and(xvalid,yvalid))[0]
+        if do_plot:
+            plt.figure()
+            plt.subplot(1,2,1)
+            plt.plot(xshifts,'k-')
+            plt.plot(xmed,'b-')
+            plt.plot(yshifts,'k--')
+            plt.plot(ymed,'b--')
+            plt.show()
+
+        return xshifts[valid],yshifts[valid],goodnesses[valid],valid
+
+        
+        
+        
+            
+    def filter_registration_old(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
 
         xvalid = np.abs(xshifts - np.median(xshifts))<=xmax
         yvalid = np.abs(yshifts - np.median(yshifts))<=ymax
