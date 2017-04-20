@@ -23,6 +23,33 @@ class Series:
         self.reference = reference_frame
         self.h5.put('/reference_frame',reference_frame)
 
+
+    def crop_borders(self,im):
+        # remove edges of im that contain no information
+        vprof = np.std(im,axis=1)
+        valid_region_y = np.where(vprof)[0]
+        hprof = np.std(im,axis=0)
+        valid_region_x = np.where(hprof)[0]
+        y1 = valid_region_y[0]
+        y2 = valid_region_y[-1]
+        x1 = valid_region_x[0]
+        x2 = valid_region_x[-1]
+        return im[y1:y2,x1:x2]
+
+    def get_cropper(self,im):
+        # return a cropper function that
+        # will crop images according to im's
+        # empty (uninformative) borders
+        vprof = np.std(im,axis=1)
+        valid_region_y = np.where(vprof)[0]
+        hprof = np.std(im,axis=0)
+        valid_region_x = np.where(hprof)[0]
+        y1 = valid_region_y[0]
+        y2 = valid_region_y[-1]
+        x1 = valid_region_x[0]
+        x2 = valid_region_x[-1]
+        return lambda x: x[y1:y2,x1:x2]
+        
     def correct_reference_a(self,kernel_size=10,do_plot=False):
         try:
             si = self.h5['sum_image'][:,:]
@@ -315,269 +342,7 @@ class Series:
 
         return out
 
-    
-    def render_old(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
-
-        if len(frames_to_save):
-            frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
-            if not os.path.exists(frames_directory):
-                os.makedirs(frames_directory)
-
-        files = self.h5['frames'].keys()
-        
-        sign = -1
-            
-        # remember the convention here: x and y shifts are the
-        # amount of shift required to align the line in question
-        # with the reference image
-        # first, find the minimum and maximum x and y shifts,
-        # in order to know how big the canvas must be for fitting
-        # all of the lines
-        xmin = np.inf
-        xmax = -np.inf
-        ymin = np.inf
-        ymax = -np.inf
-
-        for filename in files:
-            keys = self.h5['/frames/%s'%filename].keys()
-            for k in keys:
-                test = self.get_image(filename,0,None)
-                n_slow,n_fast = test.shape
-
-                goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
-                xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
-                yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
-
-                xshifts = np.squeeze(xshifts)
-                yshifts = np.squeeze(yshifts)
-
-                xshifts,yshifts,goodnesses = self.filter_registration_2(xshifts,yshifts,goodnesses)
-
-                yshifts = yshifts + np.arange(n_slow)
-
-                assert len(yshifts)==n_slow
-                
-                valid = np.where(goodnesses>=goodness_threshold)[0]
-
-                print len(valid)
-                
-                if len(valid):
-                    t = np.arange(len(xshifts))
-                    xshifts = xshifts[valid]
-                    yshifts = yshifts[valid]
-                    t = t[valid]
-
-                    #plt.figure()
-                    #plt.plot(t,xshifts)
-                    #plt.plot(t,yshifts-t)
-                    #plt.show()
-                
-                    newxmin = np.min(xshifts)
-                    newxmax = np.max(xshifts)
-                    newymin = np.min(yshifts)
-                    newymax = np.max(yshifts)
-
-                    xmin = min(xmin,newxmin)
-                    xmax = max(xmax,newxmax)
-                    ymin = min(ymin,newymin)
-                    ymax = max(ymax,newymax)
-
-
-
-        print ymin,ymax
-        sys.exit()
-        xmin = np.round(xmin*oversample_factor)
-        xmax = np.round(xmax*oversample_factor)
-        dx = xmax-xmin
-        xoffset = xmin
-        
-        width = n_fast*oversample_factor + dx
-
-        ymin = np.round(ymin*oversample_factor)
-        ymax = np.round(ymax*oversample_factor)
-        dy = ymax-ymin
-        yoffset = ymin
-        height = oversample_factor + dy
-
-        test_oversampled = zoom(test,oversample_factor)
-        sy_oversampled,sx_oversampled = test_oversampled.shape
-
-        erx1 = -xoffset
-        ery1 = -yoffset
-        erx2 = erx1+sx_oversampled
-        ery2 = ery1+sy_oversampled
-        
-        embedded_reference = np.zeros((height,width))
-        ref_oversampled = zoom(self.reference,oversample_factor)
-
-        print embedded_reference.shape,ery1,ery2
-        print ref_oversampled.shape
-        sys.exit()
-        
-        embedded_reference[ery1:ery2,erx1:erx2] = ref_oversampled
-
-        sum_image = np.zeros((height,width))
-        counter_image = np.zeros((height,width))
-        correlation_image = np.zeros((height,width))
-        
-        x1 = round(sign*xoffset)
-        x2 = x1+sx_oversampled
-        y1 = round(sign*yoffset)
-        y2 = y1+sy_oversampled
-        fig = plt.figure()
-        all_corr_coefs = []
-        #ref_clim = np.percentile(self.reference,(1,99.5))
-
-
-        frame_index = 0
-        for filename in files:
-
-            keys = self.h5['/frames/%s'%filename].keys()
-            
-            for k in keys:
-                current_sum_image = np.zeros((height,width))
-                current_counter_image = np.zeros((height,width))
-                goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
-                xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
-                yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
-                xshifts = np.squeeze(xshifts)+hc
-                yshifts = np.squeeze(yshifts)+vc
-
-                xshifts,yshifts,goodnesses = self.filter_registration(xshifts,yshifts,goodnesses)
-
-                valid = np.where(goodnesses>=goodness_threshold)[0]
-
-                im = self.get_image(filename,int(k),layer_names)
-
-                if (not any(xshifts)) and (not any(yshifts)) and (not corrected):
-                    block = zoom(im,oversample_factor)
-                    bsy,bsx = block.shape
-                    x1 = -xoffset
-                    y1 = -yoffset
-                    x2 = x1+bsx
-                    y2 = y1+bsy
-                    sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
-                    counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
-                    correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + 1.0
-                    current_sum_image[y1:y2,x1:x2] = current_sum_image[y1:y2,x1:x2] + block
-                    current_counter_image[y1:y2,x1:x2] = current_counter_image[y1:y2,x1:x2] + 1.0
-                    correlation_vector = np.ones(goodnesses.shape)
-                    self.h5.put('/reference_coordinates/x1',x1)
-                    self.h5.put('/reference_coordinates/x2',x2)
-                    self.h5.put('/reference_coordinates/y1',y1)
-                    self.h5.put('/reference_coordinates/y2',y2)
-
-                else:
-                    correlation_vector = np.ones(goodnesses.shape)*np.nan
-                    if len(valid):
-                        for v in valid:
-                            line = im[v]
-                            line = np.expand_dims(line,0)
-                            block = zoom(line,oversample_factor)
-                            bsy,bsx = block.shape
-                            x1 = int(np.round(xshifts[v]*oversample_factor-xoffset))
-                            y1 = int(v*oversample_factor+np.round(yshifts[v]*oversample_factor-yoffset))
-                            x2 = x1+bsx
-                            y2 = y1+bsy
-
-                            # im1 = sum_image[y1:y2,x1:x2].ravel()
-                            # if np.min(im1)==np.max(im1) and False:
-                            #     corr = 1.0
-                            # else:
-                            #     corr_valid = np.where(im1)[0]
-                            #     a,b = im1[corr_valid],block.ravel()[corr_valid]
-                            #     corr = np.corrcoef(a,b)[1,0]
-                            #     plt.figure()
-                            #     plt.subplot(1,2,1)
-                            #     plt.plot(a)
-                            #     plt.subplot(1,2,2)
-                            #     plt.plot(b)
-                            #     plt.show()
-                            # all_corr_coefs.append(corr)
-
-                            ref_section = embedded_reference[y1:y2,x1:x2].ravel()
-                            corr_valid = np.where(ref_section)[0]
-                            a,b = ref_section[corr_valid],block.ravel()[corr_valid]
-                            corr = np.corrcoef(a,b)[1,0]
-
-                            correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + corr
-                            correlation_vector[v] = corr
-                            if corr>correlation_threshold:
-                                sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
-                                counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
-                                current_sum_image[y1:y2,x1:x2] = current_sum_image[y1:y2,x1:x2] + block
-                                current_counter_image[y1:y2,x1:x2] = current_counter_image[y1:y2,x1:x2] + 1.0
-
-                self.h5.put('/frames/%s/%s/correlations'%(filename,k),correlation_vector)
-
-                if do_plot:
-                    temp = counter_image.copy()
-                    temp[np.where(temp==0)] = 1.0
-                    av = sum_image/temp
-
-
-                    plt.clf()
-                    plt.subplot(1,3,1)
-                    plt.cla()
-                    clim = (np.median(av)-2*np.std(av),np.median(av)+2*np.std(av))
-                    plt.imshow(av,cmap='gray',clim=clim,interpolation='none')
-
-                    plt.subplot(1,3,2)
-                    plt.cla()
-                    plt.imshow(counter_image)
-                    plt.colorbar()
-
-                    plt.subplot(1,3,3)
-                    plt.cla()
-                    try:
-                        plt.hist(all_corr_coefs,100)
-                    except:
-                        pass
-                    #plt.colorbar()
-                    plt.pause(.0000000001)
-
-
-                if frame_index in frames_to_save:
-                    if corrected:
-                        outfn = os.path.join(frames_directory,'corrected_frame_%03d.npy'%frame_index)
-                    else:
-                        outfn = os.path.join(frames_directory,'frame_%03d.npy'%frame_index)
-                    current_counter_image[np.where(current_counter_image==0)] = 1.0
-                    out = current_sum_image/current_counter_image
-                    print 'Saving frame to %s.'%outfn
-                    np.save(outfn,out)
-                frame_index = frame_index + 1
-            
-        temp = counter_image.copy()
-        temp[np.where(temp==0)] = 1.0
-        av = sum_image/temp
-
-        if corrected:
-            corrstr = '/corrected'
-        else:
-            corrstr = ''
-            
-        self.h5.put('%s/correlation_image'%corrstr,correlation_image)
-        self.h5.put('%s/counter_image'%corrstr,counter_image)
-        self.h5.put('%s/average_image'%corrstr,av)
-        self.h5.put('%s/sum_image'%corrstr,sum_image)
-        
-
-        if do_plot:
-            plt.close()
-
-            plt.subplot(1,2,1)
-            plt.imshow(av,cmap='gray',clim=clim,interpolation='none')
-
-            plt.subplot(1,2,2)
-            plt.imshow(counter_image)
-            plt.colorbar()
-
-            plt.savefig('%s_%s_rendered.png'%(self.series_filename.replace('.hdf5',''),corrstr),dpi=300)
-            plt.show()
-        
-
-    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
+    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.05,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
 
         if len(frames_to_save):
             frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
@@ -684,18 +449,15 @@ class Series:
                 y2 = y1 + bsy
 
                 ref_section = embedded_reference[y1:y2,x1:x2].ravel()
-                eref_std = np.std(ref_section)
-                if eref_std:
-                    corr = np.corrcoef(ref_section,block.ravel())[1,0]
-                else:
-                    corr = 1.0
+                #eref_std = np.std(ref_section)
+                corr = np.corrcoef(ref_section,block.ravel())[1,0]
                 correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + corr
                 correlation_vector[idx] = corr
                 if corr>correlation_threshold:
                     sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                     counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
             self.h5.put('/frames/%s/%s/correlations'%(filename,k[1]),correlation_vector)
-
+            print np.nanmean(correlation_vector),np.min(correlation_vector),np.max(correlation_vector)
             if do_plot:
                 temp = counter_image.copy()
                 temp[np.where(temp==0)] = 1.0
@@ -725,10 +487,11 @@ class Series:
         temp[np.where(temp==0)] = 1.0
         av = sum_image/temp
 
-        self.h5.put('/correlation_image',correlation_image)
-        self.h5.put('/counter_image',counter_image)
-        self.h5.put('/average_image',av)
-        self.h5.put('/sum_image',sum_image)
+        cropper = self.get_cropper(counter_image)
+        self.h5.put('/correlation_image',cropper(correlation_image))
+        self.h5.put('/counter_image',cropper(counter_image))
+        self.h5.put('/average_image',cropper(av))
+        self.h5.put('/sum_image',cropper(sum_image))
         
         if do_plot:
             plt.close()
@@ -744,64 +507,34 @@ class Series:
             plt.show()
         
             
-    def filter_registration(self,xshifts,yshifts,goodnesses,xmax=3,ymax=3,medfilt_region=19,do_plot=False):
+    def filter_registration(self,xshifts,yshifts,goodnesses,xmax=3,ymax=3,medfilt_region=49,do_plot=False):
         xmed = medfilt(xshifts,medfilt_region)
         ymed = medfilt(yshifts,medfilt_region)
         xerr = np.abs(xshifts-xmed)
         yerr = np.abs(yshifts-ymed)
         xvalid = xerr<=xmax
         yvalid = yerr<=ymax
+        
 
         valid = np.where(np.logical_and(xvalid,yvalid))[0]
+
+        print '%d points: '%len(valid),valid
         if do_plot:
             plt.figure()
             plt.subplot(1,2,1)
             plt.plot(xshifts,'k-')
-            plt.plot(xmed,'b-')
+            #plt.plot(xmed,'b-')
             plt.plot(yshifts,'k--')
-            plt.plot(ymed,'b--')
+            #plt.plot(ymed,'b--')
+
+            plt.subplot(1,2,2)
+            plt.plot(valid,xshifts[valid],'ks')
+            plt.plot(valid,yshifts[valid],'ko')
+            
             plt.show()
 
         return xshifts[valid],yshifts[valid],goodnesses[valid],valid
-
         
-        
-        
-            
-    def filter_registration_old(self,xshifts,yshifts,goodnesses,xmax=10,ymax=10):
-
-        xvalid = np.abs(xshifts - np.median(xshifts))<=xmax
-        yvalid = np.abs(yshifts - np.median(yshifts))<=ymax
-        invalid = np.logical_or(1-xvalid,1-yvalid)
-        goodnesses[invalid] = -np.inf
-
-        return xshifts,yshifts,goodnesses
-        
-    def filter_registration_2(self,xshifts,yshifts,goodnesses,xmax=3,ymax=3):
-
-        xmed = medfilt(xshifts,9)
-        ymed = medfilt(yshifts,9)
-        xerr = np.abs(xshifts-xmed)
-        yerr = np.abs(yshifts-ymed)
-
-
-        plt.subplot(1,2,1)
-        plt.plot(xshifts)
-        plt.plot(yshifts)
-        plt.plot(xmed)
-        plt.plot(ymed)
-        plt.subplot(1,2,2)
-        plt.plot(xerr)
-        plt.plot(yerr)
-        plt.show()
-        
-        xvalid = xerr<=xmax
-        yvalid = yerr<=ymax
-
-        invalid = np.logical_or(1-xvalid,1-yvalid)
-        goodnesses[invalid] = -np.inf
-
-        return xshifts,yshifts,goodnesses
         
     def goodness_histogram(self):
         all_goodnesses = self.get_all_goodnesses()

@@ -872,7 +872,6 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
     XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
     use_gaussian = True
 
-
     for iy in range(sy):
 
         pct_done = round(float(iy)/float(sy)*100)
@@ -884,11 +883,12 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
         y = np.arange(sy)-float(iy)
 
         if use_gaussian:
-            g = np.exp((-y**2)/(2*float(strip_width)**2))#/np.sqrt(2*strip_width**2*np.pi)
+            # use strip_width/2.0 for sigma (hence no 2x in denom of exponent)
+            g = np.exp((-y**2)/(float(strip_width)**2))#/np.sqrt(2*strip_width**2*np.pi)
         else:
             g = np.zeros(y.shape)
-            #g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
-            g[iy:iy+strip_width] = 1.0
+            g[np.where(np.abs(y)<=strip_width/2.0)] = 1.0
+            #g[iy:iy+strip_width] = 1.0
 
         temp_tar = (tar.T*g).T
 
@@ -960,7 +960,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
 
             plt.subplot(2,4,1)
             plt.cla()
-            plt.imshow((centered_xc/denom)**2,cmap='gray',interpolation='none')
+            plt.imshow(centered_xc/denom,cmap='gray',interpolation='none')
             plt.colorbar()
             plt.subplot(2,4,2)
             plt.cla()
@@ -975,9 +975,14 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
             plt.title('goodness')
             plt.subplot(2,4,4)
             plt.cla()
+
+            clim = (np.min(centered_xc/denom),np.max(centered_xc/denom))
+            plt.imshow(centered_xc/denom,cmap='gray',interpolation='none',aspect='normal',clim=clim)
+            plt.xlim((cpeakx-half_window,cpeakx+half_window))
+            plt.ylim((cpeaky-half_window,cpeaky+half_window))
             
-            plt.imshow(centered_xc[peaky+Ny//2-half_window:peaky+Ny//2+half_window,peakx+Nx//2-half_window:peakx+Nx//2+half_window],cmap='gray',interpolation='none',aspect='normal')
-            plt.colorbar()
+            #plt.imshow(centered_xc[peaky+Ny//2-half_window:peaky+Ny//2+half_window,peakx+Nx//2-half_window:peakx+Nx//2+half_window],cmap='gray',interpolation='none',aspect='normal')
+            #plt.colorbar()
 
             clim = (tar.min(),tar.max())
             plt.subplot(2,4,5)
