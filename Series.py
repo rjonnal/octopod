@@ -6,6 +6,7 @@ import glob
 from scipy.ndimage import zoom
 from scipy.interpolate import griddata
 from scipy.signal import fftconvolve,medfilt
+from scipy.io import savemat
 
 class Series:
 
@@ -169,6 +170,7 @@ class Series:
         all_yshifts = np.array(all_yshifts)
         all_xshifts = np.array(all_xshifts)
 
+
         # diff these:
         # we do this to effectively remove outliers,
         # since the line-to-line differences in x
@@ -177,12 +179,20 @@ class Series:
         d_yshifts = np.diff(all_yshifts,axis=1)
         d_xshifts = np.diff(all_xshifts,axis=1)
 
+        plt.figure()
+        plt.imshow(d_yshifts,aspect='normal',interpolation='none')
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(d_xshifts,aspect='normal',interpolation='none')
+        plt.colorbar()
+        
         # keep track of the medians of the first columns,
         # because we need these values to reconstruct
         # the absolute positions with cumsum below
         first_y = np.median(all_yshifts[:,0])
         first_x = np.median(all_xshifts[:,0])
 
+        
         # remove outliers (replace with nans)
         def outlier_to_nan(arr,ulim=5.0,llim=-5.0):
             invalid = np.where(np.logical_or(arr>ulim,arr<llim))
@@ -202,7 +212,13 @@ class Series:
 
         vc = np.cumsum(d_y)
         hc = np.cumsum(d_x)
-        
+
+        if False: # save eye motion data to a MAT file
+            outdict = {}
+            outdict['horizontal_eye_position_pixels'] = hc
+            outdict['vertical_eye_position_pixels'] = vc
+            savemat('eye_motion.mat',outdict)
+
         reference = self.h5['reference_frame'][:,:]
         original_sy,original_sx = reference.shape
         
