@@ -170,38 +170,54 @@ class Series:
         all_yshifts = np.array(all_yshifts)
         all_xshifts = np.array(all_xshifts)
 
+        if do_plot:
+            plt.figure()
+            plt.subplot(1,2,1)
+            plt.imshow(all_xshifts,interpolation='none',aspect='normal')
+            plt.subplot(1,2,2)
+            plt.imshow(all_yshifts,interpolation='none',aspect='normal')
 
         # diff these:
         # we do this to effectively remove outliers,
         # since the line-to-line differences in x
         # and y can be anticipated while the absolute
         # positions cannot be (as well)
-        d_yshifts = np.diff(all_yshifts,axis=1)
-        d_xshifts = np.diff(all_xshifts,axis=1)
-
-        plt.figure()
-        plt.imshow(d_yshifts,aspect='normal',interpolation='none')
-        plt.colorbar()
-        plt.figure()
-        plt.imshow(d_xshifts,aspect='normal',interpolation='none')
-        plt.colorbar()
         
+        d_yshifts_unfixed = np.diff(all_yshifts,axis=1)
+        d_xshifts_unfixed = np.diff(all_xshifts,axis=1)
+
+        if do_plot:
+            plt.figure()
+            plt.subplot(1,2,1)
+            plt.imshow(d_xshifts_unfixed,interpolation='none',aspect='normal',clim=(-10,10))
+            plt.title('dx, before removing outliers')
+            plt.subplot(1,2,2)
+            plt.imshow(d_yshifts_unfixed,interpolation='none',aspect='normal',clim=(-10,10))
+            plt.title('dy, before removing outliers')
+
         # keep track of the medians of the first columns,
         # because we need these values to reconstruct
         # the absolute positions with cumsum below
         first_y = np.median(all_yshifts[:,0])
         first_x = np.median(all_xshifts[:,0])
-
-        
         # remove outliers (replace with nans)
-        def outlier_to_nan(arr,ulim=5.0,llim=-5.0):
+        def outlier_to_nan(arr,ulim=.5,llim=-.5):
             invalid = np.where(np.logical_or(arr>ulim,arr<llim))
             arr[invalid] = np.nan
             return arr
 
-        d_yshifts = outlier_to_nan(d_yshifts)
-        d_xshifts = outlier_to_nan(d_xshifts)
+        d_yshifts = outlier_to_nan(d_yshifts_unfixed)
+        d_xshifts = outlier_to_nan(d_xshifts_unfixed)
 
+        if do_plot:
+            plt.figure()
+            plt.subplot(1,2,1)
+            plt.title('dx, after removing outliers')
+            plt.imshow(d_xshifts,interpolation='none',aspect='normal',clim=(-10,10))
+            plt.subplot(1,2,2)
+            plt.imshow(d_yshifts,interpolation='none',aspect='normal',clim=(-10,10))
+            plt.title('dy, after removing outliers')
+            
         # now, nanmean these diffs to get the average
         # lag biases; these will be integrated to get
         # the eye position
@@ -257,7 +273,7 @@ class Series:
             plt.imshow(corrected_reference,cmap='gray',interpolation='none',clim=clim)
             plt.title('corrected b')
             plt.colorbar()
-            #plt.show()
+            plt.show()
 
         self.h5.put('/corrected_b/reference_frame',corrected_reference)
         self.h5.put('/corrected_b/horizontal_correction',hc)
@@ -275,7 +291,7 @@ class Series:
             print 'Series already has entry for %s.'%target_tag
             return
 
-        target = self.get_image(filename,vidx,layer_names)
+        target,label = self.get_image(filename,vidx,layer_names)
         reference = self.reference
         y,x,g = utils.strip_register(target,reference,oversample_factor,strip_width,do_plot=do_plot,use_gaussian=use_gaussian)
         
@@ -306,6 +322,8 @@ class Series:
             # anyway
             layer_names = [target_h5['projections'].keys()[0]]
 
+        label = '_'.join(layer_names)
+
         if len(layer_names)>1:
             test = target_h5['projections'][layer_names[0]][vidx,:,:]
             n_slow,n_fast = test.shape
@@ -316,7 +334,7 @@ class Series:
             del stack
         else:
             out = target_h5['projections'][layer_names[0]][vidx,:,:]    
-        return out
+        return out,label
 
     def get_n_frames(self):
         count = 0
@@ -358,7 +376,20 @@ class Series:
 
         return out
 
-    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=0.05,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[]):
+    def goodness_histogram(self):
+        files = self.h5['frames'].keys()
+        all_goodnesses = []
+        for filename in files:
+            keys = self.h5['/frames/%s'%filename].keys()
+            for k in keys:
+                print filename
+                goodnesses = list(self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:])
+                all_goodnesses = all_goodnesses + goodnesses
+
+        plt.hist(all_goodnesses,500)
+        plt.show()
+    
+    def render(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=-1.0,overwrite=False,oversample_factor=3,do_plot=False,frames_to_save=[],left_crop=0):
 
         if len(frames_to_save):
             frames_directory = self.series_filename.replace('.hdf5','')+'_saved_frames'
@@ -384,7 +415,7 @@ class Series:
         for filename in files:
             keys = self.h5['/frames/%s'%filename].keys()
             for k in keys:
-                test = self.get_image(filename,0,None)
+                test,label = self.get_image(filename,0,layer_names)
                 n_slow,n_fast = test.shape
 
                 goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
@@ -451,11 +482,12 @@ class Series:
             xshifts,yshifts,goodnesses,indices = reg_dict[k]
             filename = k[0]
             frame_index = int(k[1])
-            im = self.get_image(filename,frame_index,layer_names)
+            im,label = self.get_image(filename,frame_index,layer_names)
             correlation_vector = np.zeros((n_slow))
             
             for idx,xs,ys,g in zip(indices,xshifts,yshifts,goodnesses):
-                line = im[idx,:]
+                xs = xs + left_crop
+                line = im[idx,left_crop:]
                 line = np.expand_dims(line,0)
                 block = zoom(line,oversample_factor)
                 bsy,bsx = block.shape
@@ -473,7 +505,7 @@ class Series:
                     sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                     counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
             self.h5.put('/frames/%s/%s/correlations'%(filename,k[1]),correlation_vector)
-            print np.nanmean(correlation_vector),np.min(correlation_vector),np.max(correlation_vector)
+            print correlation_vector.max(),correlation_vector.min(),correlation_vector.mean()
             if do_plot:
                 temp = counter_image.copy()
                 temp[np.where(temp==0)] = 1.0
@@ -504,10 +536,10 @@ class Series:
         av = sum_image/temp
 
         cropper = self.get_cropper(counter_image)
-        self.h5.put('/correlation_image',cropper(correlation_image))
-        self.h5.put('/counter_image',cropper(counter_image))
-        self.h5.put('/average_image',cropper(av))
-        self.h5.put('/sum_image',cropper(sum_image))
+        self.h5.put('/correlation_image/%s'%label,cropper(correlation_image))
+        self.h5.put('/counter_image/%s'%label,cropper(counter_image))
+        self.h5.put('/average_image/%s'%label,cropper(av))
+        self.h5.put('/sum_image/%s'%label,cropper(sum_image))
         
         if do_plot:
             plt.close()
@@ -519,7 +551,7 @@ class Series:
             plt.imshow(counter_image)
             plt.colorbar()
 
-            plt.savefig('%s_%s_rendered.png'%(self.series_filename.replace('.hdf5',''),corrstr),dpi=300)
+            #plt.savefig('%s_%s_rendered.png'%(self.series_filename.replace('.hdf5',''),corrstr),dpi=300)
             plt.show()
         
             
@@ -552,20 +584,6 @@ class Series:
         return xshifts[valid],yshifts[valid],goodnesses[valid],valid
         
         
-    def goodness_histogram(self):
-        all_goodnesses = self.get_all_goodnesses()
-        plt.hist(all_goodnesses,100)
-        plt.show()
-        
-    def get_all_goodnesses(self,exclude_reference=True):
-        all_goodnesses = []
-        keys = self.h5.keys()
-        for k in keys:
-            goodnesses = self.h5['%s/%s/goodnesses'%(filename,k)][:]
-            if np.prod(goodnesses)==1.0 and exclude_reference:
-                continue
-            all_goodnesses.append(goodnesses)
-        return np.array(all_goodnesses).ravel()
 
 
     def show_images(self):
@@ -573,7 +591,7 @@ class Series:
         keys = self.h5.keys()
         for k in keys:
             plt.cla()
-            im = self.get_image(full_filename,vidx)
+            im,label = self.get_image(full_filename,vidx)
             self.imshow(im)
             plt.title(k)
             plt.pause(.1)
