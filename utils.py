@@ -891,6 +891,8 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
 
         temp_tar = (tar.T*g).T
 
+        
+        
         factor = float(sy)/np.sum(g)
 
         f0 = np.fft.fft2(temp_tar)
@@ -902,18 +904,19 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
         # fftshifted:
         num = np.abs(np.fft.ifft2(np.fft.fftshift(num),s=(Ny,Nx)))
 
-        tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
-        
-        denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
+        #tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
+        #denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
 
-        xc = num/denom*np.sqrt(sy)*oversample_factor
-        
-        
-        goodness = np.max(xc)
-
+        xc = num#/denom
         centered_xc = np.fft.fftshift(xc)
         centered_xc = (centered_xc.T - np.mean(centered_xc,axis=1)).T
-
+        centered_xc = centered_xc - centered_xc.min()
+        
+        xcmax = np.max(centered_xc)
+        xcmin = np.min(centered_xc)
+        xcstd = np.std(centered_xc)
+        goodness = xcmax/xcstd
+        
         cpeaky,cpeakx = np.where(centered_xc==np.max(centered_xc))
         
         cpeaky = float(cpeaky[0])
@@ -959,7 +962,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
 
             plt.subplot(2,4,1)
             plt.cla()
-            plt.imshow(centered_xc/denom,cmap='gray',interpolation='none')
+            plt.imshow(centered_xc,cmap='gray',interpolation='none')
             plt.colorbar()
             plt.subplot(2,4,2)
             plt.cla()
@@ -975,8 +978,8 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
             plt.subplot(2,4,4)
             plt.cla()
 
-            clim = (np.min(centered_xc/denom),np.max(centered_xc/denom))
-            plt.imshow(centered_xc/denom,cmap='gray',interpolation='none',aspect='normal',clim=clim)
+            clim = (np.min(centered_xc),np.max(centered_xc))
+            plt.imshow(centered_xc,cmap='gray',interpolation='none',aspect='normal',clim=clim)
             plt.xlim((cpeakx-half_window,cpeakx+half_window))
             plt.ylim((cpeaky-half_window,cpeaky+half_window))
             
