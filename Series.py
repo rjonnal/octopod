@@ -265,7 +265,7 @@ class Series:
         
         
         
-    def add(self,filename,vidx,layer_names=None,overwrite=False,oversample_factor=3,strip_width=3.0,do_plot=False):
+    def add(self,filename,vidx,layer_names=None,overwrite=False,oversample_factor=3,strip_width=3.0,do_plot=False,use_gaussian=True):
         
         print 'Adding %s, volume %d.'%(filename,vidx)
         
@@ -277,7 +277,7 @@ class Series:
 
         target = self.get_image(filename,vidx,layer_names)
         reference = self.reference
-        y,x,g = utils.strip_register(target,reference,oversample_factor,strip_width,do_plot=do_plot)
+        y,x,g = utils.strip_register(target,reference,oversample_factor,strip_width,do_plot=do_plot,use_gaussian=use_gaussian)
         
         self.h5.put('/frames/%s/x_shifts'%target_tag,x)
         self.h5.put('/frames/%s/y_shifts'%target_tag,y)

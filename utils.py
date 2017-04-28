@@ -822,7 +822,7 @@ def efficient_strip_register_testing(target,reference,oversample_factor,strip_wi
     return y_peaks,x_peaks,goodnesses
     
         
-def strip_register(target,reference,oversample_factor,strip_width,do_plot=False):
+def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,use_gaussian=True):
 
     # this function returns the x and y shifts required to align lines in TARGET
     # to REFERENCE, such that xshift -1 and yshift +2 for a given line means that
@@ -870,8 +870,7 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False)
 
     
     XX,YY = np.meshgrid(np.arange(Nx),np.arange(Ny))
-    use_gaussian = True
-
+    
     for iy in range(sy):
 
         pct_done = round(float(iy)/float(sy)*100)
