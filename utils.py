@@ -890,8 +890,6 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
             #g[iy:iy+strip_width] = 1.0
 
         temp_tar = (tar.T*g).T
-
-        
         
         factor = float(sy)/np.sum(g)
 
@@ -903,7 +901,6 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
 
         # fftshifted:
         num = np.abs(np.fft.ifft2(np.fft.fftshift(num),s=(Ny,Nx)))
-
         #tar_autocorr_max = np.max(np.abs(np.fft.ifft2(f0*f0.conjugate())))
         #denom = np.sqrt(ref_autocorr_max)*np.sqrt(tar_autocorr_max)
 
@@ -915,46 +912,26 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
         xcmax = np.max(centered_xc)
         xcmin = np.min(centered_xc)
         xcstd = np.std(centered_xc)
-        goodness = xcmax/xcstd
-        
+
         cpeaky,cpeakx = np.where(centered_xc==np.max(centered_xc))
-        
-        cpeaky = float(cpeaky[0])
-        cpeakx = float(cpeakx[0])
-        
-        peakx = cpeakx
-        peaky = cpeaky
 
-        peakx = peakx - Nx // 2
-        peaky = peaky - Ny // 2
-
-        
-        # plt.figure()
-        # plt.imshow(tar)
-        # plt.colorbar()
-        # plt.figure()
-        # plt.imshow(ref)
-        # plt.colorbar()
-        # plt.figure()
-        # plt.imshow(ref-tar)
-        # plt.colorbar()
-        # plt.show()
-        # print peaky[0],iy
-        # print tar.shape
-        # print ref.shape
-        # tarline = tar[iy-peaky[0],:]
-        # refline = ref[iy,:]
-        # plt.plot(tarline)
-        # plt.plot(refline)
-        # plt.show()
-
-        peaky = peaky/oversample_factor
-        peakx = peakx/oversample_factor
+        if not len(cpeaky):
+            peaky = 0
+            peakx = 0
+            goodness = 0
+        else:
+            goodness = xcmax/xcstd
+            cpeaky = float(cpeaky[0])
+            cpeakx = float(cpeakx[0])
+            peakx = cpeakx
+            peaky = cpeaky
+            peakx = peakx - Nx // 2
+            peaky = peaky - Ny // 2
+            peaky = peaky/oversample_factor
+            peakx = peakx/oversample_factor
         
         y_peaks.append(peaky)
         x_peaks.append(peakx)
-
-
         goodnesses.append(goodness)
         half_window = 20
         if do_plot:
