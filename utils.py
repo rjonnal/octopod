@@ -447,7 +447,17 @@ def raps(im,N=1024,kind='linear'):
     im_out = interpolator(freq_out)
     
     return im_out, freq_out
-              
+
+def laps(im,axis=1,kind='linear'):
+    if axis==0:
+        im = im.T
+
+    sy,sx = im.shape
+    freq = np.fft.fftshift(np.fft.fftfreq(sx))
+    ps = np.abs(np.fft.fftshift(np.fft.fft(im,axis=1))).mean(axis=0)
+    return ps,freq
+
+
 def gaussian_convolve(im,sigma,mode='same'):
     
     kernel_width = np.ceil(sigma*8) # 4 standard deviations gets pretty close to zero
