@@ -7,6 +7,7 @@ from scipy.ndimage import zoom
 from scipy.interpolate import griddata
 from scipy.signal import fftconvolve,medfilt
 from scipy.io import savemat
+from clicky import collector
 
 class Series:
 
@@ -19,11 +20,15 @@ class Series:
         if not reference_frame is None:
             self.reference = reference_frame
             self.h5.put('/reference_frame',reference_frame)
+        else:
+            try:
+                self.reference = self.h5['/reference_frame'][:,:]
+            except Exception as e:
+                print 'Warning: empty Series started w/o reference frame.'
 
     def set_reference_frame(self,reference_frame):
         self.reference = reference_frame
         self.h5.put('/reference_frame',reference_frame)
-
 
     def crop_borders(self,im):
         # remove edges of im that contain no information
@@ -51,7 +56,56 @@ class Series:
         x2 = valid_region_x[-1]
         return lambda x: x[y1:y2,x1:x2]
         
+
+    def crop_and_label_average_volume(self,tag='ISOS',labels=['ELM','ISOS','COST','RPE']):
+        """Find the average volume tagged TAG and interactively
+        crop it in 3D and label it"""
+
+        av = self.h5['/average_volume/%s'%tag][:,:,:]
+        zproj = av.mean(axis=1)
+        xc,yc,_=collector([zproj])
+        rect = np.array(xc+yc)
+        rect = np.round(rect).astype(int)
+        self.h5.put('average_volume/ISOS_xy_rect',rect)
+        x1 = rect[0]
+        x2 = rect[1]
+        y1 = rect[2]
+        y2 = rect[3]
+        
+        yproj = np.log(av.mean(axis=0)+1000.0)
+        xc,yc,_=collector([yproj])
+        zlim = np.round(yc).astype(int)
+        self.h5.put('average_volume/ISOS_zlims',zlim)
+        z1 = zlim[0]
+        z2 = zlim[1]
+            
+        av = av[y1:y2,z1:z2,x1:x2]
+        sy,sz,sx = av.shape
+        
+        bscan = np.log(av[sy//2,:,:]+1000.0-av.min())**.5
+        for label in ['ELM','ISOS','ISOS_distal','COST_proximal','COST','RPE','OPL','CH']:
+            #xc,zc,_=collector([bscan],titles=['Click upper and lower extents of %s.'%label])
+            z = np.arange(bscan.shape[0])
+            b = np.mean(bscan,axis=1)
+            zc,xc,_=collector([(z,b)],titles=['Click left and right extents of %s.'%label])
+            if len(zc)<2:
+                sys.exit('Must select two points.')
+            zc = np.round(np.array(zc))
+            zc = np.array([zc.min(),zc.max()]).astype(int)
+            self.h5.put('average_volume/%s_labels/%s'%(tag,label),zc)
+
+    def get_labels(self,tag):
+        labels = {}
+        for k in self.h5['average_volume/%s_labels'%tag].keys():
+            labels[k] = self.h5['average_volume/%s_labels/%s'%(tag,k)].value
+        return labels
     
+    def get_average_volume(self,tag):
+        av = self.h5['/average_volume/%s'%tag][:,:,:]
+        x1,x2,y1,y2 = self.h5['average_volume/ISOS_xy_rect'][:]
+        z1,z2 = self.h5['average_volume/ISOS_zlims'][:]
+        return av[y1:y2,z1:z2,x1:x2]
+        
     def correct_reference_a(self,kernel_size=10,do_plot=False):
         try:
             si = self.h5['sum_image'][:,:]

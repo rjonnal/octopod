@@ -454,7 +454,9 @@ def laps(im,axis=1,kind='linear'):
 
     sy,sx = im.shape
     freq = np.fft.fftshift(np.fft.fftfreq(sx))
-    ps = np.abs(np.fft.fftshift(np.fft.fft(im,axis=1))).mean(axis=0)
+    valid = np.where(freq>=0)[0]
+    freq = freq[valid]
+    ps = np.abs(np.fft.fftshift(np.fft.fft(im,axis=1))).mean(axis=0)[valid]
     return ps,freq
 
 
