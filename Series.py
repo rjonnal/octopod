@@ -66,7 +66,7 @@ class Series:
         xc,yc,_=collector([zproj])
         rect = np.array(xc+yc)
         rect = np.round(rect).astype(int)
-        self.h5.put('average_volume/ISOS_xy_rect',rect)
+        self.h5.put('average_volume/%s_xy_rect'%tag,rect)
         x1 = rect[0]
         x2 = rect[1]
         y1 = rect[2]
@@ -75,26 +75,36 @@ class Series:
         yproj = np.log(av.mean(axis=0)+1000.0)
         xc,yc,_=collector([yproj])
         zlim = np.round(yc).astype(int)
-        self.h5.put('average_volume/ISOS_zlims',zlim)
+        self.h5.put('average_volume/%s_zlims'%tag,zlim)
         z1 = zlim[0]
         z2 = zlim[1]
             
         av = av[y1:y2,z1:z2,x1:x2]
         sy,sz,sx = av.shape
         
-        bscan = np.log(av[sy//2,:,:]+1000.0-av.min())**.5
+        bscan = av[sy//2,:,:]
+        profile = np.mean(bscan,axis=1)
+        lprofile = np.log(profile+1000.0)
+        z = np.arange(bscan.shape[0])
+        self.h5.put('average_volume/%s_profile'%tag,profile)
         for label in ['ELM','ISOS','ISOS_distal','COST_proximal','COST','RPE','OPL','CH']:
             #xc,zc,_=collector([bscan],titles=['Click upper and lower extents of %s.'%label])
-            z = np.arange(bscan.shape[0])
-            b = np.mean(bscan,axis=1)
-            zc,xc,_=collector([(z,b)],titles=['Click left and right extents of %s.'%label])
+            zc,xc,_=collector([(z,lprofile)],titles=['Click left and right extents of %s.'%label])
             if len(zc)<2:
                 sys.exit('Must select two points.')
             zc = np.round(np.array(zc))
             zc = np.array([zc.min(),zc.max()]).astype(int)
             self.h5.put('average_volume/%s_labels/%s'%(tag,label),zc)
 
-    def get_labels(self,tag):
+    def average_is_cropped_and_labeled(self,tag):
+        labeled = True
+        try:
+            x = self.h5['/average_volume/%s_labels'%tag]
+        except Exception as e:
+            labeled = False
+        return labeled
+            
+    def get_average_volume_labels(self,tag):
         labels = {}
         for k in self.h5['average_volume/%s_labels'%tag].keys():
             labels[k] = self.h5['average_volume/%s_labels/%s'%(tag,k)].value

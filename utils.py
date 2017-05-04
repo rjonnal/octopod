@@ -336,8 +336,6 @@ def translation1(vec0in, vec1in, xlims=None, equalize=False, debug=False):
 
 
 def find_cones(data,neighborhood_size,nstd=0.0,do_plot=False):
-
-
     threshold = nstd*np.std(data)
     
     #neighborhood = morphology.generate_binary_structure(3,3)
@@ -372,9 +370,9 @@ def find_cones(data,neighborhood_size,nstd=0.0,do_plot=False):
     x, y = [], []
     for dy,dx in slices:
         x_center = (dx.start + dx.stop - 1)/2
-        x.append(x_center)
+        x.append(x_center+1)
         y_center = (dy.start + dy.stop - 1)/2    
-        y.append(y_center)
+        y.append(y_center+1)
 
     return x,y
 
@@ -1330,7 +1328,41 @@ def findPeaks2d(im,axis=2,vSlopeThreshold=0,hSlopeThreshold=0):
     else:
         sys.exit('findPeaks2d: bad value for axis parameter; use 0, 1, or 2.')
 
+def ascend2d(im,xstart,ystart,max_travel=3.0,do_plot=False):
+    x = xstart
+    y = ystart
+    d = 0.0
+    counter = 0
+    while d<=max_travel:
+        if do_plot:
+            plt.imshow(im,cmap='gray',interpolation='none')
+            plt.xlim((x-3,x+3))
+            plt.ylim((y-3,y+3))
+            plt.plot(x,y,'go')
+        counter = counter + 1
+        neighbor_heights = []
+        shifts = []
+        for dx in range(-1,2,1):
+            for dy in range(-1,2,1):
+                shifts.append((dx,dy))
+                try:
+                    neighbor_heights.append(im[y+dy,x+dx])
+                except IndexError as e:
+                    neighbor_heights.append(-np.inf)
+        widx = np.argmax(neighbor_heights)
+        wshift = shifts[widx]
+        if wshift==(0,0):
+            return x,y
+        else:
+            x = x + wshift[0]
+            y = y + wshift[1]
+            d = np.sqrt((x-xstart)**2+(y-ystart)**2)
+        if do_plot:
+            plt.plot(x,y,'ro')
+            plt.show()
 
+        return xstart,ystart
+        
 def ascend(vec,start):
     floor = np.floor
     ceil = np.ceil
@@ -1380,7 +1412,7 @@ def deproud(im,y1,y2,x1,x2):
     return y1,y2,x1,x2
         
         
-def nxcorr1(vec1,vec2,doPlots=False):
+def nxcorr1(vec1,vec2,do_plot=False):
     '''Returns shift,xc:
     shift is the number of pixels that vec2 must be
       shifted in order to align with vec1
@@ -1410,7 +1442,7 @@ def nxcorr1(vec1,vec2,doPlots=False):
 
 
 
-    if doPlots:
+    if do_plot:
         plt.figure()
         plt.subplot(3,1,1)
         plt.plot(vec1)
@@ -1850,7 +1882,7 @@ def threshold(g,sigma,frac,nbins,erosion_diameter):
     gto = morphology.grey_erosion(gt,footprint=strel(diameter=erosion_diameter))
     return gto
 
-def nxcorr(vec1,vec2,doPlots=False):
+def nxcorr(vec1,vec2,do_plot=False):
     '''Given two vectors TARGET and REFERENCE, nxcorr(TARGET,REFERENCE)
     will return a pair (tuple) of values, (SHIFT, CORR). CORR is a quantity
     corresponding to the Pearson correlation of the two vectors, accounting
@@ -1889,9 +1921,7 @@ def nxcorr(vec1,vec2,doPlots=False):
     else:
         shift = len(nxcval)/2.0 - peakIdx
 
-
-
-    if doPlots:
+    if do_plot:
         plt.figure()
         plt.subplot(3,1,1)
         plt.plot(vec1)
