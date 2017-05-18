@@ -8,7 +8,7 @@ import scipy as sp
 from matplotlib import pyplot as plt
 import octopod_config as ocfg
 import logging,sys,os
-#from mayavi import mlab
+from mayavi import mlab
 from utils import autotrim_volume, autotrim_bscan
 import glob
 
@@ -112,23 +112,26 @@ class VolumeProjectionMaker:
                 z1 = min(clicks[-2],clicks[-1])
                 z2 = max(clicks[-2],clicks[-1])
                 self.areal_projection = np.mean(self.avol[:,z1:z2,:],axis=1)
+                self.clim = np.percentile(self.areal_projection[np.where(self.areal_projection)],(1,99.5))
                 plt.subplot(1,2,1)
                 plt.cla()
                 plt.plot(self.profile)
                 plt.axvspan(z1,z2,alpha=0.3)
                 plt.subplot(1,2,2)
                 plt.cla()
-                plt.imshow(self.areal_projection,aspect='auto',interpolation='none')
+                #plt.imshow(self.areal_projection,aspect='auto',interpolation='none')
+                plt.imshow(self.areal_projection,aspect='auto',interpolation='none',cmap='gray',clim=self.clim)
                 plt.draw()
             
         cid = fig.canvas.mpl_connect('button_press_event',onclick)
 
 
         self.areal_projection = np.mean(self.avol,axis=1)
+        self.clim = np.percentile(self.areal_projection[np.where(self.areal_projection)],(1,99.5))
         plt.subplot(1,2,1)
         plt.plot(self.profile)
         plt.subplot(1,2,2)
-        plt.imshow(self.areal_projection,aspect='auto',interpolation='none')
+        plt.imshow(self.areal_projection,aspect='auto',interpolation='none',cmap='gray',clim=self.clim)
         plt.show()
 
 
