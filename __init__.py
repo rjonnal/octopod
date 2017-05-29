@@ -14,7 +14,7 @@ from Processor import *
 from DispersionOptimizer import *
 from Model import *
 import utils
-from movie import *
+#from movie import *
 from VisualizationTools import *
 from Reporter import *
 from Series import *
