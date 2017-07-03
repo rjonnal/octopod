@@ -1,64 +1,63 @@
 import matplotlib
-matplotlib.use('Qt4Agg')
+#matplotlib.use('Qt4Agg')
 #matplotlib.interactive(True)
-
 from octopod.DataStore import H5
 import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
 import octopod_config as ocfg
 import logging,sys,os
-from mayavi import mlab
+#from mayavi import mlab
 from utils import autotrim_volume, autotrim_bscan
 import glob
 
-class Viewer3D:
+# class Viewer3D:
 
-    def __init__(self,vol,zmin=None,zmax=None):
-        self.logger = logging.getLogger(__name__)
-        self.avol = vol
-        prof = np.mean(np.mean(self.avol,axis=2),axis=0)
+#     def __init__(self,vol,zmin=None,zmax=None):
+#         self.logger = logging.getLogger(__name__)
+#         self.avol = vol
+#         prof = np.mean(np.mean(self.avol,axis=2),axis=0)
 
-        if zmin is None or zmax is None:
-            fig = plt.figure()
+#         if zmin is None or zmax is None:
+#             fig = plt.figure()
 
-            global clicks,z1,z2
-            clicks = []
-            def onclick(event):
-                global clicks,z1,z2
-                newclick = round(event.xdata)
-                clicks.append(newclick)
-                if len(clicks)>=2:
-                    z1 = min(clicks[-2],clicks[-1])
-                    z2 = max(clicks[-2],clicks[-1])
-                    plt.cla()
-                    plt.plot(prof)
-                    plt.axvspan(z1,z2,alpha=0.3)
-                    plt.draw()
+#             global clicks,z1,z2
+#             clicks = []
+#             def onclick(event):
+#                 global clicks,z1,z2
+#                 newclick = round(event.xdata)
+#                 clicks.append(newclick)
+#                 if len(clicks)>=2:
+#                     z1 = min(clicks[-2],clicks[-1])
+#                     z2 = max(clicks[-2],clicks[-1])
+#                     plt.cla()
+#                     plt.plot(prof)
+#                     plt.axvspan(z1,z2,alpha=0.3)
+#                     plt.draw()
 
-            cid = fig.canvas.mpl_connect('button_press_event',onclick)
-            plt.plot(prof)
-            plt.show()
-            zmin = z1
-            zmax = z2
+#             cid = fig.canvas.mpl_connect('button_press_event',onclick)
+#             plt.plot(prof)
+#             plt.show()
+#             zmin = z1
+#             zmax = z2
 
-        self.avol = self.avol[:,zmin:zmax,:]
+#         self.avol = self.avol[:,zmin:zmax,:]
         
-        vmed = np.median(self.avol)
-        vmean = np.mean(self.avol)
-        vmax = np.max(self.avol)
-        vmin = np.min(self.avol)
-        vstd = np.std(self.avol)
+#         vmed = np.median(self.avol)
+#         vmean = np.mean(self.avol)
+#         vmax = np.max(self.avol)
+#         vmin = np.min(self.avol)
+#         vstd = np.std(self.avol)
         
-        scatter_field = mlab.pipeline.scalar_field(self.avol)
-        vmin,vmax = np.percentile(self.avol,[25,95])
-        mlab.pipeline.volume(scatter_field,vmin=vmin,vmax=vmax,color='gray')
-        # mlab.pipeline.iso_surface(scatter_field, contours=[vmax, ],)
-        # mlab.pipeline.image_plane_widget(scatter_field,
-        #                     plane_orientation='z_axes',
-        #                     slice_index=10)
+#         scatter_field = mlab.pipeline.scalar_field(self.avol)
+#         vmin,vmax = np.percentile(self.avol,[25,95])
+#         mlab.pipeline.volume(scatter_field,vmin=vmin,vmax=vmax,color='gray')
+#         # mlab.pipeline.iso_surface(scatter_field, contours=[vmax, ],)
+#         # mlab.pipeline.image_plane_widget(scatter_field,
+#         #                     plane_orientation='z_axes',
+#         #                     slice_index=10)
         
-        mlab.show()
+#         mlab.show()
 
 class VolumeProjectionMaker:
 
@@ -109,8 +108,8 @@ class VolumeProjectionMaker:
             newclick = round(event.xdata)
             clicks.append(newclick)
             if len(clicks)>=2:
-                z1 = min(clicks[-2],clicks[-1])
-                z2 = max(clicks[-2],clicks[-1])
+                z1 = int(np.round(min(clicks[-2],clicks[-1])))
+                z2 = int(np.round(max(clicks[-2],clicks[-1])))
                 self.areal_projection = np.mean(self.avol[:,z1:z2,:],axis=1)
                 self.clim = np.percentile(self.areal_projection[np.where(self.areal_projection)],(1,99.5))
                 plt.subplot(1,2,1)

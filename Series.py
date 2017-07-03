@@ -215,7 +215,7 @@ class Series:
         self.h5.put('/corrected_a/vertical_correction',vc)
 
 
-    def correct_reference_b(self,do_plot=False):
+    def correct_reference_b(self,do_plot=False,goodness_threshold=0,medfilt_kernel=0,ignore_y=False):
 
         files = self.h5['frames'].keys()
         frame_keys = []
@@ -226,21 +226,31 @@ class Series:
 
         all_yshifts = []
         all_xshifts = []
+        all_goodnesses = []
         for fk in frame_keys:
             ys = self.h5[fk]['y_shifts'][:]
             all_yshifts.append(ys)
             xs = self.h5[fk]['x_shifts'][:]
             all_xshifts.append(xs)
+            g = self.h5[fk]['goodnesses'][:]
+            all_goodnesses.append(g)
 
         all_yshifts = np.array(all_yshifts)
         all_xshifts = np.array(all_xshifts)
-
+        all_goodnesses = np.array(all_goodnesses)
+        # now all_yshifts and all_xshifts are 2D arrays;
+        # the first dimension (vertical) corresponds to
+        # frame index, and the second dimension (horizontal)
+        # corresponds to row index within the frame
+        
         if do_plot:
             plt.figure()
-            plt.subplot(1,2,1)
+            plt.subplot(1,3,1)
             plt.imshow(all_xshifts,interpolation='none',aspect='normal')
-            plt.subplot(1,2,2)
+            plt.subplot(1,3,2)
             plt.imshow(all_yshifts,interpolation='none',aspect='normal')
+            plt.subplot(1,3,3)
+            plt.imshow(all_goodnesses,interpolation='none',aspect='normal')
 
         # diff these:
         # we do this to effectively remove outliers,
@@ -250,6 +260,12 @@ class Series:
         
         d_yshifts_unfixed = np.diff(all_yshifts,axis=1)
         d_xshifts_unfixed = np.diff(all_xshifts,axis=1)
+
+        # make a goodness mask:
+        if goodness_threshold:
+            dg = np.min(np.array([all_goodnesses[:,1:],all_goodnesses[:,:-1]]),axis=0)
+            goodness_mask = np.ones(dg.shape)*np.nan
+            goodness_mask[np.where(dg>goodness_threshold)] = 1.0
 
         if do_plot:
             plt.figure()
@@ -265,8 +281,17 @@ class Series:
         # the absolute positions with cumsum below
         first_y = np.median(all_yshifts[:,0])
         first_x = np.median(all_xshifts[:,0])
+
         # remove outliers (replace with nans)
-        def outlier_to_nan(arr,ulim=.5,llim=-.5):
+        # thresholds of .5,-.5 are somewhat artibrary, between
+        # thresholds established by maximum drift and saccade speeds
+        # Using max values for the latter from Martinez-Conde, 2004
+        # (0.5 deg/s and 97 deg/s, resp.), we get limits of
+        # 0.01 um and 1.8 um, resp. Practically, any threshold in
+        # (0.33,5.0] works, provided we do not exclude
+        # the smallest possible shift (0.33 in the case of
+        # oversampling by 3)
+        def outlier_to_nan(arr,ulim=.34,llim=-.34):
             invalid = np.where(np.logical_or(arr>ulim,arr<llim))
             arr[invalid] = np.nan
             return arr
@@ -274,6 +299,10 @@ class Series:
         d_yshifts = outlier_to_nan(d_yshifts_unfixed)
         d_xshifts = outlier_to_nan(d_xshifts_unfixed)
 
+        if goodness_threshold:
+            d_yshifts = d_yshifts*goodness_mask
+            d_xshifts = d_xshifts*goodness_mask
+        
         if do_plot:
             plt.figure()
             plt.subplot(1,2,1)
@@ -288,11 +317,43 @@ class Series:
         # the eye position
         d_y = np.nanmean(d_yshifts,axis=0)
         d_x = np.nanmean(d_xshifts,axis=0)
-        d_y = np.array([first_y]+list(d_y))
-        d_x = np.array([first_x]+list(d_x))
+        # original, working version:
+        #d_y = np.array([first_y]+list(d_y))
+        #d_x = np.array([first_x]+list(d_x))
+        # modified version, 2017.06.30
+        d_y = np.array([d_y[0]]+list(d_y))
+        d_x = np.array([d_x[0]]+list(d_x))
 
+
+        #if medfilt_kernel:
+        #    d_y = medfilt(d_y,medfilt_kernel)
+        #    d_x = medfilt(d_x,medfilt_kernel)
+        
+        if do_plot:
+            plt.figure()
+            plt.subplot(1,2,1)
+            plt.plot(d_x)
+            plt.subplot(1,2,2)
+            plt.plot(d_y)
+            
         vc = np.cumsum(d_y)
         hc = np.cumsum(d_x)
+        #if medfilt_kernel:
+        #    hc = medfilt(hc,medfilt_kernel)
+        #    vc = medfilt(vc,medfilt_kernel)
+
+        if ignore_y:
+            vc = vc*0.0
+
+        if do_plot:
+            plt.figure()
+            plt.subplot(1,3,1)
+            plt.plot(hc)
+            plt.subplot(1,3,2)
+            plt.plot(vc)
+            plt.subplot(1,3,3)
+            plt.plot(hc,vc)
+            
 
         if False: # save eye motion data to a MAT file
             outdict = {}
@@ -309,6 +370,7 @@ class Series:
                 oversample_factor = self.h5['frames'][fk][idx]['oversample_factor'].value
                 break
 
+            
         to_XX,to_YY = np.meshgrid(np.arange(original_sx),np.arange(original_sy))
 
         from_XX = (to_XX.T + hc).T
@@ -550,15 +612,16 @@ class Series:
             reg_dict[key] = (xs,ys,g,v)
                 
 
-        canvas_width = canvas_width*oversample_factor
-        canvas_height = (canvas_height+1)*oversample_factor
+        canvas_width = int(canvas_width*oversample_factor)
+        canvas_height = int((canvas_height+1)*oversample_factor)
 
         rmean = np.mean(self.reference)
+
         embedded_reference = np.ones((canvas_height,canvas_width))*rmean
-        ref_x1 = ref_x1*oversample_factor
-        ref_x2 = ref_x2*oversample_factor
-        ref_y1 = ref_y1*oversample_factor
-        ref_y2 = ref_y2*oversample_factor
+        ref_x1 = int(ref_x1*oversample_factor)
+        ref_x2 = int(ref_x2*oversample_factor)
+        ref_y1 = int(ref_y1*oversample_factor)
+        ref_y2 = int(ref_y2*oversample_factor)
         ref_oversampled = zoom(self.reference,oversample_factor)
         embedded_reference[ref_y1:ref_y2,ref_x1:ref_x2] = ref_oversampled
         
@@ -726,9 +789,9 @@ class Series:
                 reg_dict[(filename,k)] = (xshifts,yshifts,zshifts,goodnesses,valid)
 
         
-        canvas_width = xmax-xmin+n_fast
-        canvas_height = ymax-ymin+n_slow
-        canvas_depth = zmax-zmin+max_depth+1
+        canvas_width = int(xmax-xmin+n_fast)
+        canvas_height = int(ymax-ymin+n_slow)
+        canvas_depth = int(zmax-zmin+max_depth+1)
         print 'canvas_depth start',canvas_depth
         
         ref_x1 = 0 - xmin
@@ -794,7 +857,7 @@ class Series:
                         cut_count =+ 1
                     if cut_count:
                         print 'cut %d lines'%cut_count    
-                    shifted_bscan[z1:z2,:] = bscan
+                    shifted_bscan[int(z1):int(z2),:] = bscan
                 print
 
                 if False:
