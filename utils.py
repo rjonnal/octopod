@@ -1832,6 +1832,15 @@ def gaussian_blur(im,sigma=1.0,kernel_size=11):
             data[:,:,idx] = signal.convolve2d(im[:,:,idx],g,'same')/gsum
     return data
     
+def gaussian_kernel(sigma=1.0,kernel_size=11):
+    xx,yy = np.meshgrid(np.arange(kernel_size),np.arange(kernel_size))
+    xx = xx.astype(np.float) - (kernel_size-1)/2
+    yy = yy.astype(np.float) - (kernel_size-1)/2
+    rad = xx**2+yy**2
+    g = np.exp(-rad/(2*sigma**2))
+    g = g/np.sum(g)
+    return g
+
 def bmpify(im):
     return np.clip(np.round(im),0,255).astype(np.uint8)
 

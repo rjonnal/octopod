@@ -44,7 +44,7 @@ source_spectra = {}
 # to fit error in calibration procedure
 source_spectra['2g_aooct'] = [ -6.59868380e-11, 8.08231883e-07]
 #source_spectra['2g_aooct'] = [ -1.48412304e-15, -6.48214461e-11, 8.08083508e-07]
-
+source_spectra['hroct'] = [6.2e-11,8.01e-7] # from prev. correspondence w/ Iwona
 
 
 dc_cutoff = 50

@@ -27,6 +27,13 @@ class Dataset:
         raw_temp,raw_extension = os.path.splitext(self.raw_data_filename)
         self.h5fn = raw_temp + '.hdf5'
         self.xml_fn = raw_temp + '.xml'
+        if not os.path.exists(self.xml_fn):
+            print 'uh oh'
+            xml_temp = raw_temp
+            xml_temp = '_'.join(xml_temp.split('_')[:-1])+'.xml'
+            if os.path.exists(xml_temp):
+                self.logger.info('Could not locate %s.\nUsing %s instead.'%(self.xml_fn,xml_temp))
+                self.xml_fn = xml_temp
         self.h5 = H5(self.h5fn)
 
 
@@ -86,10 +93,9 @@ class Dataset:
         op = OCTProcessor(self.h5)
         op.run()
 
-    def optimize_dispersion(self,n_lines=1000):
+    def optimize_dispersion(self,n_lines=1000,do_plot=False):
         do = DispersionOptimizer(self.h5)
-        do.optimize(n_lines=n_lines)
-
+        do.optimize(n_lines=n_lines,do_plot=do_plot)
 
     def flip(self):
         f = Flipper(self.h5)
