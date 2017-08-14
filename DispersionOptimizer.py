@@ -63,7 +63,7 @@ class DispersionOptimizer:
         else:
             plt.show()
 
-    def make_test_frame(self,size=5000):
+    def make_test_frame(self,size=1000):
         self.logger.info('Generating a random test frame from raw data.')
         
         n_depth = self.h5.get('/config/n_depth')[()]
@@ -76,8 +76,8 @@ class DispersionOptimizer:
         hypercube[...] = self.h5.get('raw_data')[...]
         for k in range(size):
             v = np.random.randint(n_vol)
-            s = np.random.randint(n_slow)
-            f = np.random.randint(n_fast)
+            s = np.random.randint(n_slow-20)+10
+            f = np.random.randint(n_fast-20)+10
             test_frame[k,:] = hypercube[v][s][f][:]
         del hypercube
         return test_frame

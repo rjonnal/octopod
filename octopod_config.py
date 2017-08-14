@@ -42,17 +42,26 @@ source_spectra = {}
 # the next two came from calibration with Ocean Optics source
 # use first order one initially since second order one more likely
 # to fit error in calibration procedure
-source_spectra['2g_aooct'] = [ -6.59868380e-11, 8.08231883e-07]
+
+source_spectra['2g_aooct'] = [-6.4e-11, 806e-9] # from ocean optics calibration source
+#source_spectra['2g_aooct'] = [ -6.59868380e-11, 8.08231883e-07]
 #source_spectra['2g_aooct'] = [ -1.48412304e-15, -6.48214461e-11, 8.08083508e-07]
 source_spectra['hroct'] = [6.2e-11,8.01e-7] # from prev. correspondence w/ Iwona
 
+#806 .064
 
 dc_cutoff = 50
 
-model_database = '/home/rjonnal/data/Dropbox/Share/global_data/axial_model/database.hdf5'
-dispersion_database = '/home/rjonnal/Dropbox/Share/global_data/dispersion/database.hdf5'
-strip_database_folder = '/home/rjonnal/data/Dropbox/Share/global_data/strip_registration/'
-areal_cropping_database = '/home/rjonnal/data/Dropbox/Share/global_data/areal_cropping/database.hdf5'
+#model_database = '/home/rjonnal/data/Dropbox/Share/global_data/axial_model/database.hdf5'
+#dispersion_database = '/home/rjonnal/Dropbox/Share/global_data/dispersion/database.hdf5'
+#strip_database_folder = '/home/rjonnal/data/Dropbox/Share/global_data/strip_registration/'
+#areal_cropping_database = '/home/rjonnal/data/Dropbox/Share/global_data/areal_cropping/database.hdf5'
+
+model_database = 'D:/Data_Share/Dropbox/Share/global_data/axial_model/database.hdf5'
+dispersion_database = 'D:/Data_Share/Dropbox/Share/global_data/dispersion/database.hdf5'
+areal_cropping_database = 'D:/Data_Share/Dropbox/Share/global_data/areal_cropping/database.hdf5'
+
+
 
 dispersion_3_max = 10.0
 dispersion_3_min = -10.0

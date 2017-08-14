@@ -224,8 +224,8 @@ class Model:
             self.profile = self.h5.get('model/profile')[:]
         except Exception as e:
             self.logger.info('Model does not exist in h5 file.')
-            sys.exit()
-            #self.profile = self.make_model(data_block=data_block,debug=debug)
+            #sys.exit()
+            self.profile = self.make_model(data_block=data_block,debug=debug)
         self.data_block = data_block
 
     def blur(self,bscan,kernel_width=5):
@@ -684,7 +684,8 @@ class Model:
         label_dict = self.get_label_dict()
         if len(label_dict)==0:
             label_dict = self.find_matching_labels()
-            
+
+
         current_x = 0
         current_label = ''
 

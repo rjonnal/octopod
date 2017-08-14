@@ -93,7 +93,7 @@ class Dataset:
         op = OCTProcessor(self.h5)
         op.run()
 
-    def optimize_dispersion(self,n_lines=1000,do_plot=False):
+    def optimize_dispersion(self,n_lines=200,do_plot=False):
         do = DispersionOptimizer(self.h5)
         do.optimize(n_lines=n_lines,do_plot=do_plot)
 
