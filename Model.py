@@ -652,7 +652,7 @@ class Model:
         return guess_dicts[np.argmax(goodnesses)]
 
     
-    def click_label(self,smoothing=1):
+    def click_label(self,smoothing=1,keys=['ELM','ISOS','COST','RPE']):
         if smoothing>1:
             working_profile = sp.signal.convolve(self.profile,np.ones((smoothing)),mode='same')/float(smoothing)
         else:
@@ -685,7 +685,12 @@ class Model:
         if len(label_dict)==0:
             label_dict = self.find_matching_labels()
 
-
+        new_label_dict = {}
+        for k in label_dict.keys():
+            if k in keys:
+                new_label_dict[k] = label_dict[k]
+                
+        label_dict = new_label_dict
         current_x = 0
         current_label = ''
 

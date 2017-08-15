@@ -120,9 +120,9 @@ class Dataset:
         c = Cropper(self.h5)
         c.crop()
 
-    def model(self):
+    def model(self,keys=['ELM','ISOS','COST','RPE']):
         m = Model(self.h5)
-        m.click_label()
+        m.click_label(keys=keys)
 
     def align(self,do_plot=False):
         bsa = BScanAligner(self.h5)
