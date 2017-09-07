@@ -42,7 +42,7 @@ class Series:
         x2 = valid_region_x[-1]
         return im[y1:y2,x1:x2]
 
-    def find_corresponding_images(self,points):
+    def find_corresponding_images(self,points,minimum_goodness=10.0,rad=5):
         
         fkeys = self.h5['/frames'].keys()
         for fk in fkeys:
@@ -55,6 +55,11 @@ class Series:
                 y = self.h5['/frames'][fk][ik]['y_shifts'][:]
                 g = self.h5['/frames'][fk][ik]['correlations'][:]
                 c = self.h5['/frames'][fk][ik]['goodnesses'][:]
+                for x,y in pts:
+                    x = int(x)
+                    y = int(y)
+                    
+                    
 
 
                 
