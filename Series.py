@@ -42,6 +42,44 @@ class Series:
         x2 = valid_region_x[-1]
         return im[y1:y2,x1:x2]
 
+    def find_corresponding_images(self,points):
+        
+        fkeys = self.h5['/frames'].keys()
+        for fk in fkeys:
+            dataset_fn = os.path.join(self.working_directory,fk)
+            dataset_h5 = H5(dataset_fn)
+            ikeys = self.h5['/frames'][fk].keys()
+            for ik in ikeys:
+                vol = self.h5['/processed_data'][int(ik),:,:,:]
+                x = self.h5['/frames'][fk][ik]['x_shifts'][:]
+                y = self.h5['/frames'][fk][ik]['y_shifts'][:]
+                g = self.h5['/frames'][fk][ik]['correlations'][:]
+                c = self.h5['/frames'][fk][ik]['goodnesses'][:]
+
+
+                
+                plt.plot(x)
+                plt.plot(y)
+                plt.show()
+        sys.exit()
+
+    def find_corresponding_data(self,points):
+        ref = self.h5['/reference_frame'][:,:]
+        #xclicks,yclicks,junk = collector([ref])
+        #print xclicks
+        #print yclicks
+
+        fkeys = self.h5['/frames'].keys()
+        for fk in fkeys:
+            ikeys = self.h5['/frames'][fk].keys()
+            for ik in ikeys:
+                vol = dataset_h5
+                print fk,ik
+            sys.exit()
+
+        
+
+        
     def get_cropper(self,im):
         # return a cropper function that
         # will crop images according to im's
@@ -574,7 +612,7 @@ class Series:
 
                 xshifts = np.squeeze(xshifts)
                 yshifts = np.squeeze(yshifts)
-
+                
                 xshifts,yshifts,goodnesses,valid = self.filter_registration(xshifts,yshifts,goodnesses)
 
                 newxmin = np.min(xshifts)
@@ -705,6 +743,8 @@ class Series:
             plt.show()
         
             
+        
+            
     def render_volume(self,layer_names=None,goodness_threshold=0.0,correlation_threshold=-1.0,overwrite=False,oversample_factor=3,do_plot=False,left_crop=0,data_block='/flattened_data',offset_medfilt_kernel=9,layer_name='ISOS',align_bscan=False):
 
         files = self.h5['frames'].keys()
@@ -827,7 +867,7 @@ class Series:
         sum_image = np.zeros((canvas_height,canvas_depth,canvas_width))
         counter_image = np.ones((canvas_height,canvas_depth,canvas_width))*1e-10
 
-        
+        errorcount = 0
         for volume_count,k in enumerate(reg_dict.keys()):
             xshifts,yshifts,zshifts,goodnesses,indices = reg_dict[k]
             filename = k[0]
@@ -884,9 +924,13 @@ class Series:
                 x2 = x1 + bsx
                 y1 = int(np.round(ys*oversample_factor))
                 y2 = y1 + bsy
-                
-                sum_image[y1:y2,:,x1:x2] = sum_image[y1:y2,:,x1:x2] + block
-                counter_image[y1:y2,:,x1:x2] = counter_image[y1:y2,:,x1:x2] + 1.0
+
+                try:
+                    sum_image[y1:y2,:,x1:x2] = sum_image[y1:y2,:,x1:x2] + block
+                    counter_image[y1:y2,:,x1:x2] = counter_image[y1:y2,:,x1:x2] + 1.0
+                except Exception as e:
+                    errorcount = errorcount + 1
+                    print e
                 print volume_count,bscan_count
             if do_plot:
                 vav = sum_image[:,500:600,200]/counter_image[:,500:600,200]
@@ -909,7 +953,7 @@ class Series:
         self.h5.put('/counter_volume/%s'%label,counter_image)
         self.h5.put('/average_volume/%s'%label,av)
         self.h5.put('/sum_volume/%s'%label,sum_image)
-        
+        print 'error count %d'%errorcount
         if do_plot:
             plt.close()
             plt.subplot(1,2,1)
@@ -924,17 +968,234 @@ class Series:
             plt.show()
         
             
-    def filter_registration(self,xshifts,yshifts,goodnesses,xmax=3,ymax=3,medfilt_region=49,do_plot=False):
+    def render_stack(self,layer_names):
+        files = self.h5['frames'].keys()
+        sign = -1
+        # remember the convention here: x and y shifts are the
+        # amount of shift required to align the line in question
+        # with the reference image
+        # first, find the minimum and maximum x and y shifts,
+        # in order to know how big the canvas must be for fitting
+        # all of the lines
+        xmin = np.inf
+        xmax = -np.inf
+        ymin = np.inf
+        ymax = -np.inf
+        zmin = np.inf
+        zmax = -np.inf
+        max_depth = -np.inf
+
+        reg_dict = {}
+
+        def fix_corners(im):
+            fill_value = np.median(im)
+            to_check = np.zeros(im.shape)
+            rad = (offset_medfilt_kernel-1)//2
+            to_check[:rad,:rad] = 1
+            to_check[-rad:,:rad] = 1
+            to_check[:rad,-rad:] = 1
+            to_check[-rad:,-rad:] = 1
+            im[np.where(np.logical_and(to_check,1-im))] = fill_value
+            return im
+        
+        for filename in files:
+            keys = self.h5['/frames/%s'%filename].keys()
+            for k in keys:
+                test = self.get_volume(filename,int(k),data_block)
+                test = np.abs(test[:,:,left_crop:])
+                orig_vol_shape = test.shape
+                zshifts = self.get_z_offsets(filename,int(k),layer_name)[:,left_crop:]
+                zshifts = medfilt(zshifts,offset_medfilt_kernel)
+                zshifts = fix_corners(zshifts)
+                
+                n_slow,n_depth,n_fast = test.shape
+                if n_depth>max_depth:
+                    max_depth = n_depth
+                if False:
+                    for k in range(n_depth):
+                        im = test[:,k,:]
+                        plt.cla()
+                        plt.imshow(im,cmap='gray',interpolation='none',clim=np.percentile(test,(5,99.95)))
+                        plt.pause(.1)
+                    sys.exit()
+                
+                goodnesses = self.h5['/frames/%s/%s/goodnesses'%(filename,k)][:]
+                xshifts = sign*self.h5['/frames/%s/%s/x_shifts'%(filename,k)][:]
+                yshifts = sign*self.h5['/frames/%s/%s/y_shifts'%(filename,k)][:]
+
+                xshifts = np.squeeze(xshifts)
+                yshifts = np.squeeze(yshifts)
+
+                xshifts,yshifts,goodnesses,valid = self.filter_registration(xshifts,yshifts,goodnesses)
+
+                zshifts = zshifts[valid,:]
+                
+                newxmin = np.min(xshifts)
+                newxmax = np.max(xshifts)
+                newymin = np.min(yshifts)
+                newymax = np.max(yshifts)
+                newzmin = np.min(zshifts)
+                newzmax = np.max(zshifts)
+
+                xmin = min(xmin,newxmin)
+                xmax = max(xmax,newxmax)
+                ymin = min(ymin,newymin)
+                ymax = max(ymax,newymax)
+                zmin = min(zmin,newzmin)
+                zmax = max(zmax,newzmax)
+                yshifts = yshifts + valid
+
+                reg_dict[(filename,k)] = (xshifts,yshifts,zshifts,goodnesses,valid)
+
+        
+        canvas_width = int(xmax-xmin+n_fast)
+        canvas_height = int(ymax-ymin+n_slow)
+        canvas_depth = int(zmax-zmin+max_depth+1)
+        print 'canvas_depth start',canvas_depth
+        
+        ref_x1 = 0 - xmin
+        ref_y1 = 0 - ymin
+        ref_x2 = ref_x1 + n_fast
+        ref_y2 = ref_y1 + n_slow
+        
+        self.h5.put('/reference_coordinates/x1',ref_x1)
+        self.h5.put('/reference_coordinates/x2',ref_x2)
+        self.h5.put('/reference_coordinates/y1',ref_y1)
+        self.h5.put('/reference_coordinates/y2',ref_y2)
+        
+        for key in reg_dict.keys():
+            xs,ys,zs,g,v = reg_dict[key]
+            xs = xs - xmin
+            ys = ys - ymin
+            zs = zs - zmin
+            reg_dict[key] = (xs,ys,zs,g,v)
+
+        if False:
+            for key in reg_dict.keys():
+                plt.clf()
+                plt.imshow(reg_dict[key][2])
+                plt.colorbar()
+                plt.pause(1)
+            sys.exit()
+            
+        canvas_width = canvas_width*oversample_factor
+        canvas_height = (canvas_height+1)*oversample_factor
+        canvas_depth0 = canvas_depth
+        canvas_depth = canvas_depth*oversample_factor
+        print 'canvas_depth oversampled',canvas_depth
+        sum_image = np.zeros((canvas_height,canvas_depth,canvas_width))
+        counter_image = np.ones((canvas_height,canvas_depth,canvas_width))*1e-10
+
+        errorcount = 0
+        for volume_count,k in enumerate(reg_dict.keys()):
+            xshifts,yshifts,zshifts,goodnesses,indices = reg_dict[k]
+            filename = k[0]
+            frame_index = int(k[1])
+            vol = np.abs(self.get_volume(filename,frame_index,data_block))[:,:,left_crop:]
+            
+            for bscan_count,(idx,xs,ys,zs,g) in enumerate(zip(indices,xshifts,yshifts,zshifts,goodnesses)):
+                bscan = vol[idx,:,:]
+                n_depth,n_fast = bscan.shape
+                shifted_bscan = np.zeros((canvas_depth0,n_fast))
+                print 'bscan shape',bscan.shape
+                print 'shifted_bscan shape',shifted_bscan.shape
+                print 'zs lims',zs.min(),zs.max()
+                print 'zmax',zmax
+                if align_bscan:
+                    for i_fast in range(n_fast):
+                        z1 = zmax-zs[i_fast]
+                        z2 = z1 + n_depth
+                        shifted_bscan[z1:z2,i_fast] = bscan[:,i_fast]
+                else:
+                    z1 = zmax - int(round(np.mean(zs)))
+                    z2 = z1 + n_depth
+                    cut_count = 0
+                    while z2>shifted_bscan.shape[0]:
+                        bscan = bscan[:-1,:]
+                        z2 = z2 - 1
+                        cut_count =+ 1
+                    if cut_count:
+                        print 'cut %d lines'%cut_count    
+                    shifted_bscan[int(z1):int(z2),:] = bscan
+                print
+
+                if False:
+                    plt.subplot(3,1,1)
+                    plt.imshow(bscan,interpolation='none',cmap='gray',aspect='normal')
+                    plt.subplot(3,1,2)
+                    plt.imshow(shifted_bscan,interpolation='none',cmap='gray',aspect='normal')
+                    plt.subplot(3,1,3)
+                    plt.plot(zs)
+                    plt.figure()
+                    plt.plot(np.mean(bscan,axis=1))
+                    plt.plot(np.mean(shifted_bscan,axis=1))
+                    plt.show()
+                    continue
+                
+                block = np.zeros((oversample_factor,canvas_depth,n_fast*oversample_factor))
+                shifted_bscan = zoom(shifted_bscan,oversample_factor)
+                
+                for ofk in range(oversample_factor):
+                    block[ofk,:,:] = shifted_bscan
+                bsy,bsz,bsx = block.shape
+                
+                x1 = int(np.round(xs*oversample_factor))
+                x2 = x1 + bsx
+                y1 = int(np.round(ys*oversample_factor))
+                y2 = y1 + bsy
+
+                try:
+                    sum_image[y1:y2,:,x1:x2] = sum_image[y1:y2,:,x1:x2] + block
+                    counter_image[y1:y2,:,x1:x2] = counter_image[y1:y2,:,x1:x2] + 1.0
+                except Exception as e:
+                    errorcount = errorcount + 1
+                    print e
+                print volume_count,bscan_count
+            if do_plot:
+                vav = sum_image[:,500:600,200]/counter_image[:,500:600,200]
+                hav = sum_image[200,500:600,:]/counter_image[200,500:600,:]
+                plt.clf()
+                plt.subplot(1,2,1)
+                plt.cla()
+                plt.imshow(vav.T,cmap='gray',interpolation='none',aspect='normal')
+                plt.colorbar()
+                plt.title(volume_count)
+                plt.subplot(1,2,2)
+                plt.cla()
+                plt.imshow(hav,cmap='gray',interpolation='none',aspect='normal')
+                plt.colorbar()
+                plt.pause(.0000000001)
+
+            
+        av = sum_image/counter_image
+        label = layer_name
+        self.h5.put('/counter_volume/%s'%label,counter_image)
+        self.h5.put('/average_volume/%s'%label,av)
+        self.h5.put('/sum_volume/%s'%label,sum_image)
+        print 'error count %d'%errorcount
+        if do_plot:
+            plt.close()
+            plt.subplot(1,2,1)
+            plt.cla()
+            plt.imshow(vav.T,cmap='gray',interpolation='none',aspect='normal')
+            plt.colorbar()
+            plt.title(volume_count)
+            plt.subplot(1,2,2)
+            plt.cla()
+            plt.imshow(hav,cmap='gray',interpolation='none',aspect='normal')
+            plt.colorbar()
+            plt.show()
+
+            
+    def filter_registration(self,xshifts,yshifts,goodnesses,xmax=25,ymax=25,medfilt_region=49,do_plot=False):
         xmed = medfilt(xshifts,medfilt_region)
         ymed = medfilt(yshifts,medfilt_region)
         xerr = np.abs(xshifts-xmed)
         yerr = np.abs(yshifts-ymed)
         xvalid = xerr<=xmax
         yvalid = yerr<=ymax
-        
 
         valid = np.where(np.logical_and(xvalid,yvalid))[0]
-
         #print '%d points: '%len(valid),valid
         if do_plot:
             plt.figure()

@@ -421,9 +421,9 @@ class Model:
                     self.logger.info('write_volume_labels: %d percent done.'%(float(islow+1)/float(nslow)*100))
                 for ifast in range(nfast):
                     test = avol[islow,:,ifast]
-                    offset = soffset_matrix[ivol,islow,ifast]
+                    offset = int(round(soffset_matrix[ivol,islow,ifast]))
                     for key in label_keys:
-                        model_z_index = labels[key]
+                        model_z_index = int(round(labels[key]))
                         volume_labels[key][ivol,islow,ifast] = model_z_index-offset
                         projections[key][ivol,islow,ifast] = np.mean(test[model_z_index-offset-z_range:model_z_index-offset+z_range+1])
 
