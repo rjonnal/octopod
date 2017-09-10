@@ -42,7 +42,7 @@ class Series:
         x2 = valid_region_x[-1]
         return im[y1:y2,x1:x2]
 
-    def find_corresponding_images(self,points,minimum_goodness=10.0,output_radius=5,match_radius=2.0):
+    def find_corresponding_images(self,points,minimum_goodness=10.0,output_radius=3,match_radius=2.0,do_plot=False):
         
         fkeys = self.h5['/frames'].keys()
         for fk in fkeys:
@@ -63,12 +63,14 @@ class Series:
                 # yramp[n] is now the location of the nth target row in the reference space
                 # so we need to find n such that yramp[n]-pty is minimized
 
-                plt.subplot(1,2,1)
-                plt.imshow(self.reference,cmap='gray',interpolation='none')
+                if do_plot:
+                    plt.subplot(1,2,1)
+                    plt.imshow(self.reference,cmap='gray',interpolation='none')
                 # # quickly project the target volume
                 cmed = int(np.median(cost_depths))
                 imed = int(np.median(isos_depths))
-                plt.subplot(1,2,2)
+                if do_plot:
+                    plt.subplot(1,2,2)
                 
                 # aproj = np.mean(np.mean(np.abs(vol),axis=2),axis=0)
                 # plt.plot(aproj)
@@ -78,34 +80,37 @@ class Series:
                 # plt.show()
                 # continue
                 proj = np.abs(vol[:,imed-2:cmed+2,:]).mean(axis=1)
-                
-                plt.imshow(proj,cmap='gray',interpolation='none')
-                colors = 'rgbcymkw'
+
+                if do_plot:
+                    plt.imshow(proj,cmap='gray',interpolation='none')
+                    colors = 'rgbcymkw'
                 
                 for idx,(ptx,pty) in enumerate(points):
-                    color = colors[idx%len(colors)]
-                    plt.subplot(1,2,1)
-                    plt.plot(ptx,pty,'%so'%color)
-                    # find the closest match in the target frame
-                    # this will be the row in which the difference
-                    # between ypt is minimum, but only include
-                    # it if it's closer than match_radius
+                    if do_plot:
+                        color = colors[idx%len(colors)]
+                        plt.subplot(1,2,1)
+                        plt.plot(ptx,pty,'%so'%color)
                     yerr = np.abs(pty-yramp)
                     match_index = np.argmin(yerr)
                     plt.title(g[match_index])
                     if yerr[match_index]<=match_radius and g[match_index]>minimum_goodness:
                         yout = int(match_index)
                         xout = int(ptx + x[match_index])
-                        plt.subplot(1,2,2)
-                        plt.plot(xout,yout,'%so'%color)
-                        # isos_depth = isos_depths[yout,xout]
-                        # cost_depth = cost_depths[yout,xout]
-                        # zout = (isos_depth+cost_depth)/2.0
-                        # zrad = (cost_depth-isos_depth)/2.0+4.0
-                        # subvol = self.get_subvol(vol,yout,int(zout),xout,output_radius,int(zrad),output_radius)
-                        # plt.imshow(np.mean(np.abs(subvol),axis=1),interpolation='none',cmap='gray')
-                        # plt.show()
-                plt.show()
+                        i_depth = isos_depths[yout,xout]
+                        c_depth = cost_depths[yout,xout]
+
+                        os_mid = (i_depth+c_depth)//2
+                        depth_radius = (c_depth-i_depth)//2+8
+                        output_volume = self.get_subvol(vol,yout,c_depth,xout,output_radius,depth_radius,output_radius)
+                        print output_volume.shape
+                        continue
+                        
+                        
+                        if do_plot:
+                            plt.subplot(1,2,2)
+                            plt.plot(xout,yout,'%so'%color)
+                if do_plot:
+                    plt.show()
 
     def get_subvol(self,vol,x,y,z,xrad=0,yrad=0,zrad=0):
         # return a subvol, trimming as necessary
@@ -122,7 +127,7 @@ class Series:
         y2 = min(sy,y2)
         z1 = max(0,z1)
         z2 = min(sz,z2)
-        return vol[x1:x2,y1:y2,z1:z2]
+        return vol[int(x1):int(x2),int(y1):int(y2),int(z1):int(z2)]
 
     def find_corresponding_data(self,points):
         ref = self.h5['/reference_frame'][:,:]
