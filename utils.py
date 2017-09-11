@@ -1333,12 +1333,13 @@ def ascend2d(im,xstart,ystart,max_travel=3.0,do_plot=False):
     y = ystart
     d = 0.0
     counter = 0
+    if do_plot:
+        plt.figure()
+        plt.imshow(im,cmap='gray',interpolation='none')
+        plt.xlim((x-3,x+3))
+        plt.ylim((y-3,y+3))
+        plt.plot(x-.25,y,'go')
     while d<=max_travel:
-        if do_plot:
-            plt.imshow(im,cmap='gray',interpolation='none')
-            plt.xlim((x-3,x+3))
-            plt.ylim((y-3,y+3))
-            plt.plot(x,y,'go')
         counter = counter + 1
         neighbor_heights = []
         shifts = []
@@ -1351,17 +1352,19 @@ def ascend2d(im,xstart,ystart,max_travel=3.0,do_plot=False):
                     neighbor_heights.append(-np.inf)
         widx = np.argmax(neighbor_heights)
         wshift = shifts[widx]
+        
         if wshift==(0,0):
+            if do_plot:
+                plt.plot(x+.25,y,'ro')
+                plt.show()
             return x,y
         else:
             x = x + wshift[0]
             y = y + wshift[1]
             d = np.sqrt((x-xstart)**2+(y-ystart)**2)
-        if do_plot:
-            plt.plot(x,y,'ro')
-            plt.show()
+            
 
-        return xstart,ystart
+    return xstart,ystart
         
 def ascend(vec,start):
     floor = np.floor

@@ -11,8 +11,6 @@ s = Series(fn)
 
 #print s.h5.catalog(1)
 ref = s.h5['reference_frame'][:,:]
-plt.figure()
-plt.imshow(ref,cmap='gray',interpolation='none')
 
 cx,cy = utils.find_cones(ref,5,do_plot=False)
 cx = np.array(cx)

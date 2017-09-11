@@ -42,7 +42,7 @@ class Series:
         x2 = valid_region_x[-1]
         return im[y1:y2,x1:x2]
 
-    def find_corresponding_images(self,points,minimum_goodness=10.0,output_radius=3,match_radius=2.0,do_plot=False):
+    def find_corresponding_images(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
         
         fkeys = self.h5['/frames'].keys()
         for fk in fkeys:
@@ -59,6 +59,8 @@ class Series:
                 c = self.h5['/frames'][fk][ik]['correlations'][:]
                 g = self.h5['/frames'][fk][ik]['goodnesses'][:]
 
+                model_profile = dataset_h5['model/profile'][:]
+
                 yramp = np.arange(len(y)) - y
                 # yramp[n] is now the location of the nth target row in the reference space
                 # so we need to find n such that yramp[n]-pty is minimized
@@ -69,9 +71,6 @@ class Series:
                 # # quickly project the target volume
                 cmed = int(np.median(cost_depths))
                 imed = int(np.median(isos_depths))
-                if do_plot:
-                    plt.subplot(1,2,2)
-                
                 # aproj = np.mean(np.mean(np.abs(vol),axis=2),axis=0)
                 # plt.plot(aproj)
                 # plt.axvline(imed)
@@ -82,6 +81,7 @@ class Series:
                 proj = np.abs(vol[:,imed-2:cmed+2,:]).mean(axis=1)
 
                 if do_plot:
+                    plt.subplot(1,2,2)
                     plt.imshow(proj,cmap='gray',interpolation='none')
                     colors = 'rgbcymkw'
                 
@@ -92,17 +92,59 @@ class Series:
                         plt.plot(ptx,pty,'%so'%color)
                     yerr = np.abs(pty-yramp)
                     match_index = np.argmin(yerr)
-                    plt.title(g[match_index])
+                    if do_plot:
+                        plt.title(g[match_index])
                     if yerr[match_index]<=match_radius and g[match_index]>minimum_goodness:
                         yout = int(match_index)
                         xout = int(ptx + x[match_index])
-                        i_depth = isos_depths[yout,xout]
-                        c_depth = cost_depths[yout,xout]
+                        xout,yout = utils.ascend2d(proj,xout,yout,do_plot=False)
+                        
+                        try:
+                            i_depth = isos_depths[yout,xout]
+                            c_depth = cost_depths[yout,xout]
+                        except Exception as e:
+                            print e
+                            continue
 
                         os_mid = (i_depth+c_depth)//2
                         depth_radius = (c_depth-i_depth)//2+8
-                        output_volume = self.get_subvol(vol,yout,c_depth,xout,output_radius,depth_radius,output_radius)
-                        print output_volume.shape
+                        output_volume = self.get_subvol(vol,yout,c_depth,xout,output_radius,np.inf,output_radius)
+
+
+                        output_profile = np.mean(np.mean(np.abs(output_volume),axis=2),axis=0)
+                        shift,corr = utils.nxcorr(model_profile,output_profile)
+                        
+                        
+                        sy,sz,sx = output_volume.shape
+                        for y in range(sy):
+                            for x in range(sx):
+                                single_profile = np.abs(output_volume[y,:,x])
+                                plt.plot(output_profile)
+                                plt.plot(model_profile)
+                                plt.show()
+                        continue
+                        if False:
+                        
+                            plt.subplot(1,4,1)
+                            plt.cla()
+                            plt.imshow(np.abs(output_volume).mean(axis=0),cmap='gray')
+                            plt.axhline(i_depth, color='r')
+                            plt.axhline(c_depth, color='g')
+                            plt.subplot(1,4,2)
+                            plt.cla()
+                            plt.imshow(np.abs(output_volume).mean(axis=1),cmap='gray')
+                            plt.subplot(1,4,3)
+                            plt.cla()
+                            plt.imshow(np.abs(output_volume).mean(axis=2).T,cmap='gray')
+                            plt.axhline(i_depth, color='r')
+                            plt.axhline(c_depth, color='g')
+                            plt.subplot(1,4,4)
+                            plt.imshow(proj,cmap='gray')
+                            plt.plot(xout,yout,'r+')
+                            plt.xlim((xout-10,xout+10))
+                            plt.ylim((yout+10,yout-10))
+                            plt.show()
+                        
                         continue
                         
                         
@@ -111,7 +153,10 @@ class Series:
                             plt.plot(xout,yout,'%so'%color)
                 if do_plot:
                     plt.show()
-
+                print
+                print
+                print
+                
     def get_subvol(self,vol,x,y,z,xrad=0,yrad=0,zrad=0):
         # return a subvol, trimming as necessary
         sx,sy,sz = vol.shape
