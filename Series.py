@@ -142,44 +142,93 @@ class Series:
 
                             dpeaks.append(cost_peak-isos_peak)
                             aline_corrs.append(aline_corr)
+                            
+                            if do_plot:
+                                plt.subplot(5,3,idx*3+1)
+                                plt.imshow(np.mean(np.abs(output_volume),axis=0),cmap='gray',aspect='normal')
+                                plt.ylim((cost_guess+4,isos_guess-4))
+                                #plt.ylim((cost_guess-5,isos_guess+5))
+                                plt.subplot(5,3,idx*3+2)
+                                plt.imshow(np.mean(np.abs(output_volume),axis=2).T,cmap='gray',aspect='normal')
+                                plt.ylim((cost_guess+4,isos_guess-4))
+                                #plt.ylim((cost_guess-5,isos_guess+5))
 
-                            plt.subplot(5,3,idx*3+1)
-                            plt.imshow(np.mean(np.abs(output_volume),axis=0),cmap='gray',aspect='normal')
-                            plt.ylim((cost_guess+4,isos_guess-4))
-                            #plt.ylim((cost_guess-5,isos_guess+5))
-                            plt.subplot(5,3,idx*3+2)
-                            plt.imshow(np.mean(np.abs(output_volume),axis=2).T,cmap='gray',aspect='normal')
-                            plt.ylim((cost_guess+4,isos_guess-4))
-                            #plt.ylim((cost_guess-5,isos_guess+5))
-
-                            plt.subplot(5,3,idx*3+3)
-                            plt.plot(single_profile)
-                            plt.plot(output_profile)
-                            plt.axvline(isos_guess,color='g')
-                            plt.axvline(cost_guess,color='g')
-                            plt.axvline(isos_peak,color='r')
-                            plt.axvline(cost_peak,color='r')
-                            plt.xlim((isos_guess-4,cost_guess+4))
-                            #print cost_peak-isos_peak,aline_corr
+                                plt.subplot(5,3,idx*3+3)
+                                plt.plot(single_profile)
+                                plt.plot(output_profile)
+                                plt.axvline(isos_guess,color='g')
+                                plt.axvline(cost_guess,color='g')
+                                plt.axvline(isos_peak,color='r')
+                                plt.axvline(cost_peak,color='r')
+                                plt.xlim((isos_guess-4,cost_guess+4))
+                                #print cost_peak-isos_peak,aline_corr
 
                         # computed weighted average of dpeaks:
                         aline_corrs = np.array(aline_corrs)
-                        weighted_average = int(np.sum(dpeaks*aline_corrs)/np.sum(aline_corrs))
+                        dz = int(np.sum(dpeaks*aline_corrs)/np.sum(aline_corrs))
 
-                        probe = np.zeros(z2-z1)
-                        probe[0] = 1.0
-                        probe[weighted_average] = 1.0
+                        #probe = np.zeros(z2-z1+1)
+                        #probe[0] = 1.0
+                        #probe[weighted_average] = 1.0
 
-                        print sy
-                        plt.close('all')
+                        def mysum(x,y):
+                            return np.sqrt(x*y)
+                            #return (x+y)/2.0
+                            #return x+y+np.sqrt(x*y)
+
+                        def unwrap(vec):
+                            print vec
+                            vec2 = vec.copy()
+                            vec2[np.argmin(vec2)] = vec2[np.argmin(vec2)]+2*np.pi
+                            if np.var(vec)<np.var(vec2):
+                                return vec
+                            else:
+                                return unwrap(vec2)
+                            
+                        colors = 'rgbkcym'
+                        plt.cla()
+                        sheet = []
                         for idx,coney in enumerate(range(sy)):
-                            print 'hi'
-                            max_displacement = 4
+                            color = colors[idx%len(colors)]
                             single_profile = np.abs(output_volume[coney,:,:]).mean(axis=1)
-                            shift,corr = utils.nxcorr(single_profile[z1:z2+1],probe)
-                            print idx,shift,corr
+                            #shift,corr = utils.nxcorr(single_profile[z1:z2+1],probe)
+                            totals = []
+                            zrange = np.arange(z1,z1+6)
+                            for k in zrange:
+                                totals.append(mysum(single_profile[k],single_profile[k+dz]))
+                            isos = z1+np.argmax(totals)
+                            cost = isos+dz
+                            cut = output_volume[coney,isos-3:cost+4,:]
+                            sheet.append(cut)
+
+                            
+                        sheet = np.hstack(sheet)
+                        amplitude = np.abs(sheet)
+                        phase = np.angle(sheet)
+
+                        for row in [4,-4]:
+                            phase[row] = unwrap(phase[row])
+                            print
+                        print
                         
+                        mamp = amplitude.mean(axis=0)
+                        valid = np.where(mamp>mamp.mean())[0]
                         
+                        isos_phase = phase[4,:]
+                        phase = (phase-isos_phase)%(2*np.pi)
+                        phase_std = phase[:,valid].std(axis=1)
+
+                        plt.subplot(3,1,1)
+                        plt.imshow(amplitude,cmap='gray')
+                        plt.colorbar()
+                        plt.subplot(3,1,2)
+                        plt.imshow(phase,cmap='jet')
+                        plt.colorbar()
+                        plt.subplot(3,1,3)
+                        plt.plot(phase_std)
+                        plt.show()
+                            
+                            
                 
     def get_subvol(self,vol,x,y,z,xrad=0,yrad=0,zrad=0):
         # return a subvol, trimming as necessary
