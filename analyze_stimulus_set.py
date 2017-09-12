@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import os,sys
 
 
-wdir = '/home/rjonnal/Share/2g_aooct_data/Data/2017.08.11/'
+wdir = '/home/rjonnal/Share/2g_aooct_data/Data/2017.08.09/2.0T_0.0S_f0'
 fn = os.path.join(wdir,'reg_14_27_33-2.0T_0.0S_no_stimulus_1_000.hdf5')
 
 s = Series(fn)

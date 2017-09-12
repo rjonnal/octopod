@@ -1,3 +1,15 @@
+                        # scan through the volume and check correlation w/ en face projection to identify
+                        # most likely cone layers
+                        efp = np.median(np.abs(output_volume[:,isos_guess-2:cost_guess+2,:]),axis=1)
+                        corr_vec = []
+                        for zpos in range(isos_guess-2,cost_guess+2+1):
+                            test = np.abs(output_volume[:,zpos,:]).ravel()
+                            corr_vec.append(np.corrcoef(np.vstack((efp.ravel(),test)))[0,1])
+
+                        plt.plot(corr_vec)
+                        plt.show()
+                        continue
+                        
 ########### Code from Series.py #######################################################################
 
     

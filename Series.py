@@ -60,7 +60,8 @@ class Series:
                 g = self.h5['/frames'][fk][ik]['goodnesses'][:]
 
                 model_profile = dataset_h5['model/profile'][:]
-
+                model_isos = dataset_h5['model/labels/ISOS'].value
+                model_cost = dataset_h5['model/labels/COST'].value
                 yramp = np.arange(len(y)) - y
                 # yramp[n] is now the location of the nth target row in the reference space
                 # so we need to find n such that yramp[n]-pty is minimized
@@ -84,7 +85,8 @@ class Series:
                     plt.subplot(1,2,2)
                     plt.imshow(proj,cmap='gray',interpolation='none')
                     colors = 'rgbcymkw'
-                
+
+                plt.figure(figsize=(18,9))
                 for idx,(ptx,pty) in enumerate(points):
                     if do_plot:
                         color = colors[idx%len(colors)]
@@ -99,63 +101,85 @@ class Series:
                         xout = int(ptx + x[match_index])
                         xout,yout = utils.ascend2d(proj,xout,yout,do_plot=False)
                         
-                        try:
-                            i_depth = isos_depths[yout,xout]
-                            c_depth = cost_depths[yout,xout]
-                        except Exception as e:
-                            print e
-                            continue
-
-                        os_mid = (i_depth+c_depth)//2
-                        depth_radius = (c_depth-i_depth)//2+8
-                        output_volume = self.get_subvol(vol,yout,c_depth,xout,output_radius,np.inf,output_radius)
-
+                        output_volume = self.get_subvol(vol,yout,0,xout,output_radius,np.inf,output_radius)
 
                         output_profile = np.mean(np.mean(np.abs(output_volume),axis=2),axis=0)
+
+                        # let's try to label this cone's peaks
                         shift,corr = utils.nxcorr(model_profile,output_profile)
-                        
+                        isos_guess = int(model_isos + shift)
+                        cost_guess = int(model_cost + shift)
+
+                        z1 = isos_guess-3
+                        z2 = cost_guess+3
                         
                         sy,sz,sx = output_volume.shape
-                        for y in range(sy):
-                            for x in range(sx):
-                                single_profile = np.abs(output_volume[y,:,x])
-                                plt.plot(output_profile)
-                                plt.plot(model_profile)
-                                plt.show()
-                        continue
-                        if False:
+
+                        aline_corrs = []
+                        dpeaks = []
                         
-                            plt.subplot(1,4,1)
-                            plt.cla()
-                            plt.imshow(np.abs(output_volume).mean(axis=0),cmap='gray')
-                            plt.axhline(i_depth, color='r')
-                            plt.axhline(c_depth, color='g')
-                            plt.subplot(1,4,2)
-                            plt.cla()
-                            plt.imshow(np.abs(output_volume).mean(axis=1),cmap='gray')
-                            plt.subplot(1,4,3)
-                            plt.cla()
-                            plt.imshow(np.abs(output_volume).mean(axis=2).T,cmap='gray')
-                            plt.axhline(i_depth, color='r')
-                            plt.axhline(c_depth, color='g')
-                            plt.subplot(1,4,4)
-                            plt.imshow(proj,cmap='gray')
-                            plt.plot(xout,yout,'r+')
-                            plt.xlim((xout-10,xout+10))
-                            plt.ylim((yout+10,yout-10))
-                            plt.show()
+                        for idx,coney in enumerate(range(sy)):
+                            
+                            max_displacement = 4
+                            single_profile = np.abs(output_volume[coney,:,:]).mean(axis=1)
+
+                            # how representitive is it?
+                            aline_corr = np.corrcoef(np.vstack((single_profile[z1:z2+1],output_profile[z1:z2+1])))[0,1]
+
+                            peaks = utils.find_peaks(single_profile)
+
+                            heights = single_profile[peaks]/single_profile.std()
+                            isos_dpeaks = np.abs(peaks-isos_guess)
+                            isos_dpeaks[np.where(isos_dpeaks>=max_displacement)] = 2**16
+                            isos_scores = heights - isos_dpeaks
+
+                            cost_dpeaks = np.abs(peaks-cost_guess)
+                            cost_dpeaks[np.where(cost_dpeaks>=max_displacement)] = 2**16
+                            cost_scores = heights - cost_dpeaks
+
+                            isos_peak = peaks[np.argmax(isos_scores)]
+                            cost_peak = peaks[np.argmax(cost_scores)]
+
+                            dpeaks.append(cost_peak-isos_peak)
+                            aline_corrs.append(aline_corr)
+
+                            plt.subplot(5,3,idx*3+1)
+                            plt.imshow(np.mean(np.abs(output_volume),axis=0),cmap='gray',aspect='normal')
+                            plt.ylim((cost_guess+4,isos_guess-4))
+                            #plt.ylim((cost_guess-5,isos_guess+5))
+                            plt.subplot(5,3,idx*3+2)
+                            plt.imshow(np.mean(np.abs(output_volume),axis=2).T,cmap='gray',aspect='normal')
+                            plt.ylim((cost_guess+4,isos_guess-4))
+                            #plt.ylim((cost_guess-5,isos_guess+5))
+
+                            plt.subplot(5,3,idx*3+3)
+                            plt.plot(single_profile)
+                            plt.plot(output_profile)
+                            plt.axvline(isos_guess,color='g')
+                            plt.axvline(cost_guess,color='g')
+                            plt.axvline(isos_peak,color='r')
+                            plt.axvline(cost_peak,color='r')
+                            plt.xlim((isos_guess-4,cost_guess+4))
+                            #print cost_peak-isos_peak,aline_corr
+
+                        # computed weighted average of dpeaks:
+                        aline_corrs = np.array(aline_corrs)
+                        weighted_average = int(np.sum(dpeaks*aline_corrs)/np.sum(aline_corrs))
+
+                        probe = np.zeros(z2-z1)
+                        probe[0] = 1.0
+                        probe[weighted_average] = 1.0
+
+                        print sy
+                        plt.close('all')
+                        for idx,coney in enumerate(range(sy)):
+                            print 'hi'
+                            max_displacement = 4
+                            single_profile = np.abs(output_volume[coney,:,:]).mean(axis=1)
+                            shift,corr = utils.nxcorr(single_profile[z1:z2+1],probe)
+                            print idx,shift,corr
                         
-                        continue
                         
-                        
-                        if do_plot:
-                            plt.subplot(1,2,2)
-                            plt.plot(xout,yout,'%so'%color)
-                if do_plot:
-                    plt.show()
-                print
-                print
-                print
                 
     def get_subvol(self,vol,x,y,z,xrad=0,yrad=0,zrad=0):
         # return a subvol, trimming as necessary
