@@ -13,6 +13,7 @@ class Series:
 
     def __init__(self,series_filename,reference_frame=None):
         self.h5 = H5(series_filename)
+        self.tag = os.path.splitext(series_filename)[0]
         self.n_frames = 0
         self.tag_template = '%s/%03d'
         self.series_filename = series_filename
@@ -42,14 +43,18 @@ class Series:
         x2 = valid_region_x[-1]
         return im[y1:y2,x1:x2]
 
-    def find_corresponding_images(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
+    def make_cone_catalog(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
+        """Take a set of points in this Series' reference image,
+        corresponding to the x and y coordinate of cone centers,
+        and identify and crop the corresponding cone out of all
+        this Series' volumes."""
         
         fkeys = self.h5['/frames'].keys()
-        for fk in fkeys:
+        for fkidx,fk in enumerate(fkeys):
             dataset_fn = os.path.join(self.working_directory,fk)
             dataset_h5 = H5(dataset_fn)
             ikeys = self.h5['/frames'][fk].keys()
-            for ik in ikeys:
+            for ikidx,ik in enumerate(ikeys):
                 vol = dataset_h5['/flattened_data'][int(ik),:,:,:]
                 cost_depths = dataset_h5['model/volume_labels/COST'][int(ik),:,:]
                 isos_depths = dataset_h5['model/volume_labels/ISOS'][int(ik),:,:]
@@ -69,12 +74,15 @@ class Series:
                 cmed = int(np.median(cost_depths))
                 imed = int(np.median(isos_depths))
                 volume_enface_projection = np.abs(vol[:,imed-2:cmed+2,:]).mean(axis=1)
+
+                border = 3
                 
                 for idx,(ptx,pty) in enumerate(points):
+                    print 'frame %d/%d; vol %d/%d; cone %d/%d at %d,%d'%(fkidx+1,len(fkeys),ikidx+1,len(ikeys),idx+1,len(points),ptx,pty)
                     yerr = np.abs(pty-yramp)
                     match_index = np.argmin(yerr)
                     if yerr[match_index]<=match_radius and g[match_index]>minimum_goodness:
-
+                        print 'match exists'
                         # get the target coordinates, and then ascend the target en face projection
                         # to the peak (center) of the cone:
                         yout = int(match_index)
@@ -82,145 +90,199 @@ class Series:
                         xout,yout = utils.ascend2d(volume_enface_projection,xout,yout,do_plot=False)
                         
                         # 3D-crop the cone out of the volume, and make an axial profile from it
-                        cone_volume = self.get_subvol(vol,yout,0,xout,output_radius,np.inf,output_radius)
-                        cone_profile = np.mean(np.mean(np.abs(cone_volume),axis=2),axis=0)
-
+                        try:
+                            cone_volume = self.get_subvol(vol,yout,0,xout,output_radius,np.inf,output_radius)
+                            cone_profile = np.mean(np.mean(np.abs(cone_volume),axis=2),axis=0)
+                            shift,corr = utils.nxcorr(model_profile,cone_profile)
+                        except Exception as e:
+                            print e
+                            continue
+                        
                         # let's try to label this cone's peaks
-                        shift,corr = utils.nxcorr(model_profile,cone_profile)
+                        #print 'mp',model_profile
+                        #print 'cp',cone_profile
                         isos_guess = int(model_isos + shift)
                         cost_guess = int(model_cost + shift)
 
-                        z1 = isos_guess-3
-                        z2 = cost_guess+3
-                        
+                        # now use the height of the cone_profile at
+                        # these guesses, combined with locations and
+                        # distances of other peaks to refine the guesses
+                        max_displacement = 4
+                        peaks = utils.find_peaks(cone_profile)
+                        heights = cone_profile[peaks]/cone_profile.std()
+                        isos_dpeaks = np.abs(peaks-isos_guess)
+                        isos_dpeaks[np.where(isos_dpeaks>=max_displacement)] = 2**16
+                        cost_dpeaks = np.abs(peaks-cost_guess)
+                        cost_dpeaks[np.where(cost_dpeaks>=max_displacement)] = 2**16
+                        isos_scores = heights - isos_dpeaks
+                        cost_scores = heights - cost_dpeaks
+                        isos_guess = peaks[np.argmax(isos_scores)]
+                        cost_guess = peaks[np.argmax(cost_scores)]
+
+                        # now cross correlate the cuts through the cone with
+                        # cone_profile to see if axial eye movement between
+                        # b-scans has resulted in a peak shift
                         sy,sz,sx = cone_volume.shape
-
-                        aline_corrs = []
-                        dpeaks = []
-                        isos_candidates = []
-                        cost_candidates = []
-                        
-                        # in this loop we go through the cone's fast cuts
-                        # and determine each cut's OS length.
-                        # we'll poll the resulting numbers, weighted
-                        # by the cut's correlation with the cone_profile
-                        # in order to determine how long this cone's OS is
-                        for idx,coney in enumerate(range(sy)):
-                            
-                            max_displacement = 4
-                            cut_profile = np.abs(cone_volume[coney,:,:]).mean(axis=1)
-
-                            # how representitive is it?
-                            aline_corr = np.corrcoef(np.vstack((cut_profile[z1:z2+1],cone_profile[z1:z2+1])))[0,1]
-
-                            peaks = utils.find_peaks(cut_profile)
-                            print 'isos_guess',isos_guess
-                            print 'cost_guess',cost_guess
-                            
-                            heights = cut_profile[peaks]/cut_profile.std()
-                            isos_dpeaks = np.abs(peaks-isos_guess)
-                            isos_dpeaks[np.where(isos_dpeaks>=max_displacement)] = 2**16
-                            isos_scores = heights - isos_dpeaks
-
-                            cost_dpeaks = np.abs(peaks-cost_guess)
-                            cost_dpeaks[np.where(cost_dpeaks>=max_displacement)] = 2**16
-                            cost_scores = heights - cost_dpeaks
-                            print 'peaks      ',peaks[15:]
-                            print 'heights    ',heights[15:]
-                            print 'isos_dpeaks',isos_dpeaks[15:]
-                            print 'isos_scores',isos_scores[15:]
-                            print 'cost_dpeaks',cost_dpeaks[15:]
-                            print 'cost_scores',cost_scores[15:]
-
-                            isos_peak = peaks[np.argmax(isos_scores)]
-                            cost_peak = peaks[np.argmax(cost_scores)]
-                            isos_candidates.append(isos_peak)
-                            cost_candidates.append(cost_peak)
-                            print 'isos_peak',isos_peak
-                            print 'cost_peak',cost_peak
-                            
-                            dpeaks.append(cost_peak-isos_peak)
-                            aline_corrs.append(aline_corr)
-                            
-
-                        # computed weighted average of dpeaks:
-                        aline_corrs = np.array(aline_corrs)
-                        dz = int(np.sum(dpeaks*aline_corrs)/np.sum(aline_corrs))
-                        
-
-                        def mysum(x,y):
-                            return x+y
-                            #return (x+y)/2.0
-                            #return x+y+np.sqrt(x*y)
-
-                        def unwrap(vec,n=0):
-                            vec2 = vec.copy()
-                            vec2[np.argmin(vec2)] = vec2[np.argmin(vec2)]+2*np.pi
-                            if np.var(vec)<np.var(vec2) or n>=len(vec):
-                                return vec
-                            else:
-                                return unwrap(vec2,n+1)
-                            
                         colors = 'rgbkcym'
                         sheet = []
-                        unaligned_sheet = []
                         for idx,coney in enumerate(range(sy)):
                             color = colors[idx%len(colors)]
                             cut_profile = np.abs(cone_volume[coney,:,:]).mean(axis=1)
-                            #shift,corr = utils.nxcorr(cut_profile[z1:z2+1],probe)
-                            totals = []
-                            isos_range = np.arange(isos_peak-3:isos_peak+4)
-                            cost_range = np.arange(cost_peak-3:cost_peak+4)
-                            
-                            for k in zrange:
-                                totals.append(mysum(cut_profile[k],cut_profile[k+dz]))
-
-                            plt.plot(zrange,totals,'%s-'%color)
-                            
-                            isos = z1+np.argmax(totals)
-                            cost = isos+dz
-                            cut = cone_volume[coney,isos-3:cost+4,:]
+                            shift,corr = utils.nxcorr(cut_profile,cone_profile)
+                            z1 = int(isos_guess-border-shift)
+                            z2 = int(cost_guess+border-shift)
+                            cut = cone_volume[coney,z1:z2,:]
                             sheet.append(cut)
 
-                            unaligned_cut = cone_volume[coney,z1:z2,:]
-                            unaligned_sheet.append(unaligned_cut)
-                            
+                        sheet = np.array(sheet)
+                        sheet = np.transpose(sheet,(0,2,1))
+                        point_string = '%d_%d'%(ptx,pty)
+                        os_length = cost_guess-isos_guess
+                        key_root = '/cone_catalog/%s/%s/%s'%(point_string,fk,ik)
 
-                        sheet = np.hstack(sheet)
-                        unaligned_sheet = np.hstack(unaligned_sheet)
+                        self.h5.put('%s/x'%key_root,xout)
+                        self.h5.put('%s/y'%key_root,yout)
+                        self.h5.put('%s/isos_z'%key_root,border)
+                        self.h5.put('%s/cost_z'%key_root,border+os_length)
+                        self.h5.put('%s/cone_volume'%key_root,sheet)
+                    print
+                        
 
-                        uamplitude = np.abs(unaligned_sheet)
-                        
-                        amplitude = np.abs(sheet)
-                        phase = np.angle(sheet)
+    def get_n_volumes(self):
+        count = 0
+        fkeys = self.h5['/frames'].keys()
+        for fk in fkeys:
+            ikeys = self.h5['/frames'][fk].keys()
+            count = count + len(ikeys)
+        return count
 
-                        for row in [4,-4]:
-                            phase[row] = unwrap(phase[row])
-                        
-                        mamp = amplitude.mean(axis=0)
-                        valid = np.where(mamp>mamp.mean())[0]
-                        
-                        isos_phase = phase[3,:]
-                        phase = (phase-isos_phase)%(2*np.pi)
-                        phase_std = phase[:,valid].std(axis=1)
 
-                        plt.subplot(2,2,1)
-                        plt.imshow(amplitude,cmap='gray')
-                        plt.colorbar()
+    def get_volume_dictionary(self,order=None):
+        d = {}
+        counter = 0
+        frame_keys = self.h5['/frames'].keys()
+        if order is not None:
+            frame_keys = frame_keys[order]
+        for fk in frame_keys:
+            index_keys = self.h5['/frames/%s'%fk].keys()
+            for ik in index_keys:
+                d[(fk,ik)] = counter
+                counter = counter + 1
+        return d
+                
+    
+    def get_n_cones(self):
+        try:
+            n_cones = self.h5['cone_catalog/n_cones'].value
+        except Exception as e:
+            cone_catalog = self.h5['cone_catalog']
+            cone_keys = cone_catalog.keys()
+            n_cones = len(cone_keys)
+            self.h5.put('/cone_catalog/n_cones',n_cones)
+        return n_cones
+    
+    def get_cone_volume_size(self):
+        fast_maxes = []
+        try:
+            slow_max = self.h5['cone_catalog/slow_max'].value
+            fast_max = self.h5['cone_catalog/fast_max'].value
+            depth_max = self.h5['cone_catalog/depth_max'].value
+        except Exception as e:
+            cone_catalog = self.h5['cone_catalog']
+            cone_keys = cone_catalog.keys()
+            slow_max,fast_max,depth_max = 0,0,0
+            for ck in cone_keys:
+                if ck in ['slow_max','fast_max','depth_max','n_cones']:
+                    continue
+                frame_keys = cone_catalog['%s'%ck].keys()
+                for fk in frame_keys:
+                    index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
+                    for ik in index_keys:
+                        dims = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)].shape
+                        print ck,fk,dims
+                        if dims[1]>5:
+                            continue
+                        if dims[0]>slow_max:
+                            slow_max = dims[0]
+                        if dims[1]>fast_max:
+                            fast_max = dims[1]
+                        if dims[2]>depth_max:
+                            depth_max = dims[2]
+                        fast_maxes.append(dims[1])
+                        
+            self.h5.put('/cone_catalog/slow_max',slow_max)
+            self.h5.put('/cone_catalog/fast_max',fast_max)
+            self.h5.put('/cone_catalog/depth_max',depth_max)
+        return slow_max,fast_max,depth_max
+                    
+        
 
-                        plt.subplot(2,2,2)
-                        plt.imshow(uamplitude,cmap='gray')
-                        plt.colorbar()
-                        
-                        plt.subplot(2,2,3)
-                        plt.imshow(phase,cmap='jet')
-                        plt.colorbar()
-                        
-                        plt.subplot(2,2,4)
-                        plt.plot(phase_std)
-                        plt.show()
-                            
-                            
+    def make_big_sheet(self,phase=False):
+        volume_dictionary = self.get_volume_dictionary()
+        
+        n_volumes = self.get_n_volumes()
+        slow_max,fast_max,depth_max = self.get_cone_volume_size()
+        n_cones = self.get_n_cones()
+        border = 1
+
+        sy = (border+depth_max)*n_cones
+        sx = (border+fast_max)*n_volumes
+        dpi = 100.0
+
+        fx = sx/dpi
+        fy = sy/dpi
+            
+        sheet = np.zeros((sy,sx),dtype=np.uint8)
+        cone_catalog = self.h5['cone_catalog']
+        cone_keys = cone_catalog.keys()
+        
+        for cone_index,ck in enumerate(cone_keys):
+            print cone_index
+            if ck in ['slow_max','fast_max','depth_max','n_cones']:
+                continue
+            frame_keys = cone_catalog['%s'%ck].keys()
+            for fk in frame_keys:
+                if fk.find('no_stimulus')>-1:
+                    stimulus = False
+                elif fk.find('stimulus')>-1:
+                    stimulus = True
+                else:
+                    stimulus = False
+                    
+                index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
+                for ik in index_keys:
+                    vol = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)][:,:,:]
+                    if np.max(vol.shape)>20:
+                        continue
+                    if phase:
+                        vol = np.angle(vol)
+                    else:
+                        vol = np.abs(vol)
+                    vol = utils.smooth_cone_volume(vol)
+                    proj = vol.mean(axis=0).T
+                    proj = utils.bmpscale(proj)
+                    py,px = proj.shape
+                    volume_index = volume_dictionary[(fk,ik)]
+                    x1 = volume_index*(fast_max+border)
+                    x2 = x1+px
+                    y1 = cone_index*(depth_max+border)
+                    y2 = y1+py
+                    sheet[y1:y2,x1:x2] = proj
+                    if stimulus:
+                        sheet[y1:y2,x1-1] = 255
+
+        plt.figure(figsize=(fx,fy))
+        plt.axes([0,0,1,1])
+        plt.imshow(sheet,cmap='gray',interpolation='none')
+        plt.xticks([])
+        plt.yticks([])
+        if phase:
+            outfn = '%s_cone_catalog_sheet_phase.png'%self.tag
+        else:
+            outfn = '%s_cone_catalog_sheet_amplitude.png'%self.tag
+            
+        plt.savefig(outfn,dpi=dpi)
+        plt.show()
                 
     def find_corresponding_images_old(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
         

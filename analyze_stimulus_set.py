@@ -9,20 +9,45 @@ fn = os.path.join(wdir,'reg_14_27_33-2.0T_0.0S_no_stimulus_1_000.hdf5')
 
 s = Series(fn)
 
+try:
+    cone_catalog = s.h5['cone_catalog']
+except Exception as e:
+    print e
+    ref = s.h5['reference_frame'][:,:]
+    cx,cy = utils.find_cones(ref,5,do_plot=False)
+    cx = np.array(cx)
+    cy = np.array(cy)
+    cx = cx - 1
+    cy = cy - 1
+    points = zip(cx,cy)
+    s.make_cone_catalog(points)
+
+s.make_big_sheet(phase=True)
+sys.exit()
+
+cone_keys = cone_catalog.keys()
+max_length = 0
+
+n_volumes = s.count_volumes()
+print n_volumes
+sys.exit()
+
+for ck in cone_keys:
+    xy = ck.split('_')
+    refx = int(xy[0])
+    refy = int(xy[1])
+    frame_keys = cone_catalog['%s'%ck].keys()
+    for fk in frame_keys:
+        index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
+        for ik in index_keys:
+            dims = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)].shape
+            print ck,fk,ik,dims
+            if dims[2]>max_length:
+                max_length = dims[2]
+                
+sys.exit()
+
 #print s.h5.catalog(1)
-ref = s.h5['reference_frame'][:,:]
-
-cx,cy = utils.find_cones(ref,5,do_plot=False)
-cx = np.array(cx)
-cy = np.array(cy)
-cx = cx - 1
-cy = cy - 1
-
-points = zip(cx,cy)
-
-#points = zip([103.88548404780173, 113.65315306336024, 108.07162791161252, 99.30065981600896, 144.15220121398167],[52.054046107384579, 67.801920642672769, 111.05874056871754, 141.75712890332997, 155.91028196669026])
-
-s.find_corresponding_images(points)
 
 
 

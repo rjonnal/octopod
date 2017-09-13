@@ -1850,6 +1850,33 @@ def bmpify(im):
 def cstretch(im):
     return (im - np.min(im))/(np.max(im)-np.min(im))
 
+def bmpscale(im):
+    return bmpify(cstretch(im)*255)
+
+
+def smooth_cone_volume(vol,sigma=1.0):
+    # assumes depth is last index
+    sy,sx,sz = vol.shape
+    XX,YY = np.meshgrid(np.arange(sx),np.arange(sy))
+    XX = XX.astype(np.float)
+    YY = YY.astype(np.float)
+    p = np.mean(np.abs(vol),axis=2)
+    py,px = np.where(p==p.max())
+    py = py[0]
+    px = px[0]
+    XX = XX-px
+    YY = YY-py
+    g = np.exp(-(XX**2+YY**2)/(2*sigma**2))
+    out = np.zeros(vol.shape)
+    for z in range(out.shape[2]):
+        layer = np.abs(vol[:,:,z])
+        layer = fftconvolve(layer,g,mode='same')
+        out[:,:,z] = layer
+    return out
+    
+    
+
+    
 def high_contrast(r,g):
     out = np.zeros((r.shape[0],r.shape[1],3)).astype(np.uint8)
     out[:,:,0] = bmpify(cstretch(r)*255)
