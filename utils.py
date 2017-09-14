@@ -1847,16 +1847,20 @@ def gaussian_kernel(sigma=1.0,kernel_size=11):
 def bmpify(im):
     return np.clip(np.round(im),0,255).astype(np.uint8)
 
-def cstretch(im):
-    return (im - np.min(im))/(np.max(im)-np.min(im))
+def cstretch(im,clim=None):
+    if clim is None:
+        clim = (im.min(),im.max())
+    return (im - clim[0])/(clim[1]-clim[0])
 
-def bmpscale(im):
-    return bmpify(cstretch(im)*255)
+def bmpscale(im,clim=None):
+    return bmpify(cstretch(im,clim)*255)
 
 
 def smooth_cone_volume(vol,sigma=1.0):
     # assumes depth is last index
     sy,sx,sz = vol.shape
+    if not sy*sx*sz:
+        return vol
     XX,YY = np.meshgrid(np.arange(sx),np.arange(sy))
     XX = XX.astype(np.float)
     YY = YY.astype(np.float)
@@ -1867,6 +1871,7 @@ def smooth_cone_volume(vol,sigma=1.0):
     XX = XX-px
     YY = YY-py
     g = np.exp(-(XX**2+YY**2)/(2*sigma**2))
+    g = g/np.sum(g)
     out = np.zeros(vol.shape)
     for z in range(out.shape[2]):
         layer = np.abs(vol[:,:,z])
@@ -1900,6 +1905,16 @@ def centroid_objects(im,mask):
 def poisson(k, lamb):
     return (lamb**k/factorial(k)) * np.exp(-lamb)
 
+
+def unwrap(vec,n=0):
+    vec2 = vec.copy()
+    vec2[np.argmin(vec2)] = vec2[np.argmin(vec2)]+2*np.pi
+    if np.var(vec)<np.var(vec2) or n>=len(vec):
+        return vec
+    else:
+        return unwrap(vec2,n+1)
+    
+                        
 def get_poisson_threshold(g,frac=0.01,nbins=50,p0=4.0):
     normed_counts, bin_edges = np.histogram(g.ravel(),bins=nbins,range=[g.min()-.5,g.max()+.5],normed=True)
     bin_centers = 0.5*(bin_edges[:-1] + bin_edges[1:])

@@ -6,6 +6,7 @@ import os,sys
 
 wdir = '/home/rjonnal/Share/2g_aooct_data/Data/2017.08.09/2.0T_0.0S_f0'
 fn = os.path.join(wdir,'reg_14_27_33-2.0T_0.0S_no_stimulus_1_000.hdf5')
+#fn = os.path.join(wdir,'reg_stim_with_other_2.0T_0.0S_f0_000.hdf5')
 
 s = Series(fn)
 
@@ -19,10 +20,16 @@ except Exception as e:
     cy = np.array(cy)
     cx = cx - 1
     cy = cy - 1
+    plt.imshow(ref,cmap='gray',interpolation='none')
+    plt.autoscale(False)
+    plt.plot(cx,cy,'r+')
+    plt.show()
     points = zip(cx,cy)
     s.make_cone_catalog(points)
 
-s.make_big_sheet(phase=True)
+#s.make_big_sheet(phase=False)
+s.analyze_cone_phase()
+#s.crop_average_to_reference()
 sys.exit()
 
 cone_keys = cone_catalog.keys()

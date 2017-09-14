@@ -8,6 +8,8 @@ from scipy.interpolate import griddata
 from scipy.signal import fftconvolve,medfilt
 from scipy.io import savemat
 from clicky import collector
+import matplotlib.colors as colors
+import matplotlib.cm as cmx
 
 class Series:
 
@@ -217,7 +219,114 @@ class Series:
                     
         
 
-    def make_big_sheet(self,phase=False):
+    def analyze_cone_phase(self,do_plot=True):
+        av = self.crop_average_to_reference()
+
+        clim = np.percentile(av,(1,99.5))
+        
+        if do_plot:
+            jet = cm = plt.get_cmap('jet') 
+            cNorm  = colors.Normalize(vmin=-1.0, vmax=1.0)
+            scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
+            sy,sx = av.shape
+            ar = float(sx)/float(sy)
+            dpi = 100.0
+            outx = 800.0/dpi
+            outy = outx/ar
+            plt.figure(figsize=(outx,outy))
+            plt.axes([0,0,1,1])
+            plt.imshow(av,clim=clim,cmap='gray',interpolation='none')
+            plt.autoscale(False)
+            outfn = '%s_unmarked_average.png'%self.tag
+            plt.savefig(outfn)
+            
+        volume_dictionary = self.get_volume_dictionary()
+        
+        n_volumes = self.get_n_volumes()
+        n_cones = self.get_n_cones()
+
+        cone_catalog = self.h5['cone_catalog']
+        cone_keys = cone_catalog.keys()
+
+        
+        for cone_index,ck in enumerate(cone_keys):
+            stim_d_phase = []
+            no_stim_d_phase = []
+            if ck in ['slow_max','fast_max','depth_max','n_cones']:
+                continue
+            frame_keys = cone_catalog['%s'%ck].keys()
+
+            coords = ck.split('_')
+            x0 = int(coords[0])
+            y0 = int(coords[1])
+            
+            for fk in frame_keys:
+                if fk.find('no_stimulus')>-1:
+                    stimulus = 0
+                elif fk.find('stimulus')>-1:
+                    stimulus = 1
+                else:
+                    stimulus = 0
+                    
+                index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
+                for ik in index_keys:
+                    vol = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)][:,:,:]
+                    isos_depth = cone_catalog['%s/%s/%s/isos_z'%(ck,fk,ik)].value
+                    cost_depth = cone_catalog['%s/%s/%s/cost_z'%(ck,fk,ik)].value
+                    x = cone_catalog['%s/%s/%s/x'%(ck,fk,ik)].value
+                    y = cone_catalog['%s/%s/%s/y'%(ck,fk,ik)].value
+                    isos = vol[:,:,isos_depth].ravel()
+                    cost = vol[:,:,cost_depth].ravel()
+                    
+                    
+                    isos_phase = np.angle(isos)
+                    cost_phase = np.angle(cost)
+                    isos_amp = np.abs(isos)
+                    cost_amp = np.abs(cost)
+                    isos_real = np.real(isos)
+                    cost_real = np.real(cost)
+                    isos_imag = np.imag(isos)
+                    cost_imag = np.imag(cost)
+
+                    
+                    amp = (isos_amp+cost_amp)/2.0
+
+                    valid = np.where(amp>amp.mean()-0*amp.std())[0]
+                    d_phase = (cost_phase-isos_phase)
+                    d_phase = utils.unwrap(d_phase)
+                    d_phase_median = np.median(d_phase[valid])
+
+                    
+                    if stimulus:
+                        stim_d_phase.append(d_phase_median)
+                    else:
+                        no_stim_d_phase.append(d_phase_median)
+
+                    
+                    #print x0,y0,x,y,fk,ik,stimulus,d_phase_median
+            pv = np.nanvar(stim_d_phase)/np.nanvar(no_stim_d_phase)
+            print x0,y0,np.var(no_stim_d_phase),np.nanvar(stim_d_phase),pv
+            if do_plot and pv>0.01:
+                lu = min(1.0,-np.log(np.var(stim_d_phase)))
+                colorVal = scalarMap.to_rgba(lu)
+                plt.plot(x0*3,y0*3,marker='o',color=colorVal,alpha=0.5,markersize=10)
+                
+        if do_plot:
+            outfn = '%s_marked_average.png'%self.tag
+            plt.savefig(outfn)
+            plt.show()
+            
+    def crop_average_to_reference(self):
+        av = self.h5['/average_image/ISOS_COST'][:,:]
+        ref = self.h5['/reference_frame'][:,:]
+        x1 = int(self.h5['/reference_coordinates/x1'].value*3)
+        x2 = int(self.h5['/reference_coordinates/x2'].value*3)
+        y1 = int(self.h5['/reference_coordinates/y1'].value*3)
+        y2 = int(self.h5['/reference_coordinates/y2'].value*3)
+        av = av[2:,x1-90:x1+510]
+        return av
+    
+    def make_big_sheet(self,phase=False,sort_by_nvol=True):
         volume_dictionary = self.get_volume_dictionary()
         
         n_volumes = self.get_n_volumes()
@@ -232,27 +341,67 @@ class Series:
         fx = sx/dpi
         fy = sy/dpi
             
-        sheet = np.zeros((sy,sx),dtype=np.uint8)
         cone_catalog = self.h5['cone_catalog']
         cone_keys = cone_catalog.keys()
+
+        clim_dict = {}
+        nvol_list = []
         
         for cone_index,ck in enumerate(cone_keys):
             print cone_index
             if ck in ['slow_max','fast_max','depth_max','n_cones']:
                 continue
             frame_keys = cone_catalog['%s'%ck].keys()
+
+            cmax = -np.inf
+            cmin = np.inf
+            n_valid_vols = 0
+            
             for fk in frame_keys:
-                if fk.find('no_stimulus')>-1:
-                    stimulus = False
-                elif fk.find('stimulus')>-1:
-                    stimulus = True
-                else:
-                    stimulus = False
-                    
                 index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
                 for ik in index_keys:
                     vol = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)][:,:,:]
                     if np.max(vol.shape)>20:
+                        continue
+                    if not np.prod(vol.shape):
+                        continue
+                    if phase:
+                        vol = np.angle(vol)
+                    else:
+                        vol = np.abs(vol)
+
+                    vol = utils.smooth_cone_volume(vol)
+                    n_valid_vols = n_valid_vols+1
+                    proj = vol.mean(axis=0).T
+                    if proj.max()>cmax:
+                        cmax = proj.max()
+                    if proj.min()<cmin:
+                        cmin = proj.min()
+
+            clim_dict[ck] = (cmin,cmax)
+            nvol_list.append(n_valid_vols)
+
+        if sort_by_nvol:
+            new_cone_keys = []
+            order = np.argsort(nvol_list)[::-1]
+            for idx in order:
+                new_cone_keys.append(cone_keys[idx])
+            cone_keys = new_cone_keys
+            
+            
+        sheet = np.zeros((sy,sx),dtype=np.uint8)
+        for cone_index,ck in enumerate(cone_keys):
+            print cone_index
+            if ck in ['slow_max','fast_max','depth_max','n_cones']:
+                continue
+            frame_keys = cone_catalog['%s'%ck].keys()
+            for fk in frame_keys:
+                index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
+                for ik in index_keys:
+                    vol = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)][:,:,:]
+                    if np.max(vol.shape)>20:
+                        continue
+                    if not np.prod(vol.shape):
                         continue
                     if phase:
                         vol = np.angle(vol)
@@ -260,7 +409,7 @@ class Series:
                         vol = np.abs(vol)
                     vol = utils.smooth_cone_volume(vol)
                     proj = vol.mean(axis=0).T
-                    proj = utils.bmpscale(proj)
+                    proj = utils.bmpscale(proj,clim_dict[ck])
                     py,px = proj.shape
                     volume_index = volume_dictionary[(fk,ik)]
                     x1 = volume_index*(fast_max+border)
@@ -268,8 +417,6 @@ class Series:
                     y1 = cone_index*(depth_max+border)
                     y2 = y1+py
                     sheet[y1:y2,x1:x2] = proj
-                    if stimulus:
-                        sheet[y1:y2,x1-1] = 255
 
         plt.figure(figsize=(fx,fy))
         plt.axes([0,0,1,1])
@@ -283,206 +430,7 @@ class Series:
             
         plt.savefig(outfn,dpi=dpi)
         plt.show()
-                
-    def find_corresponding_images_old(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
-        
-        fkeys = self.h5['/frames'].keys()
-        for fk in fkeys:
-            dataset_fn = os.path.join(self.working_directory,fk)
-            dataset_h5 = H5(dataset_fn)
-            ikeys = self.h5['/frames'][fk].keys()
-            for ik in ikeys:
-                vol = dataset_h5['/flattened_data'][int(ik),:,:,:]
-                cost_depths = dataset_h5['model/volume_labels/COST'][int(ik),:,:]
-                isos_depths = dataset_h5['model/volume_labels/ISOS'][int(ik),:,:]
 
-                x = self.h5['/frames'][fk][ik]['x_shifts'][:]
-                y = self.h5['/frames'][fk][ik]['y_shifts'][:]
-                c = self.h5['/frames'][fk][ik]['correlations'][:]
-                g = self.h5['/frames'][fk][ik]['goodnesses'][:]
-
-                model_profile = dataset_h5['model/profile'][:]
-                model_isos = dataset_h5['model/labels/ISOS'].value
-                model_cost = dataset_h5['model/labels/COST'].value
-                yramp = np.arange(len(y)) - y
-                # yramp[n] is now the location of the nth target row in the reference space
-                # so we need to find n such that yramp[n]-pty is minimized
-
-                if do_plot:
-                    plt.subplot(1,2,1)
-                    plt.imshow(self.reference,cmap='gray',interpolation='none')
-                # # quickly project the target volume
-                cmed = int(np.median(cost_depths))
-                imed = int(np.median(isos_depths))
-                # aproj = np.mean(np.mean(np.abs(vol),axis=2),axis=0)
-                # plt.plot(aproj)
-                # plt.axvline(imed)
-                # plt.axvline(cmed)
-                # plt.title('%d,%d'%(imed,cmed))
-                # plt.show()
-                # continue
-                proj = np.abs(vol[:,imed-2:cmed+2,:]).mean(axis=1)
-
-                if do_plot:
-                    plt.subplot(1,2,2)
-                    plt.imshow(proj,cmap='gray',interpolation='none')
-                    colors = 'rgbcymkw'
-
-                plt.figure(figsize=(18,9))
-                for idx,(ptx,pty) in enumerate(points):
-                    if do_plot:
-                        color = colors[idx%len(colors)]
-                        plt.subplot(1,2,1)
-                        plt.plot(ptx,pty,'%so'%color)
-                    yerr = np.abs(pty-yramp)
-                    match_index = np.argmin(yerr)
-                    if do_plot:
-                        plt.title(g[match_index])
-                    if yerr[match_index]<=match_radius and g[match_index]>minimum_goodness:
-                        yout = int(match_index)
-                        xout = int(ptx + x[match_index])
-                        xout,yout = utils.ascend2d(proj,xout,yout,do_plot=False)
-                        
-                        cone_volume = self.get_subvol(vol,yout,0,xout,output_radius,np.inf,output_radius)
-
-                        cone_profile = np.mean(np.mean(np.abs(cone_volume),axis=2),axis=0)
-
-                        # let's try to label this cone's peaks
-                        shift,corr = utils.nxcorr(model_profile,cone_profile)
-                        isos_guess = int(model_isos + shift)
-                        cost_guess = int(model_cost + shift)
-
-                        z1 = isos_guess-3
-                        z2 = cost_guess+3
-                        
-                        sy,sz,sx = cone_volume.shape
-
-                        aline_corrs = []
-                        dpeaks = []
-                        
-                        for idx,coney in enumerate(range(sy)):
-                            
-                            max_displacement = 4
-                            cut_profile = np.abs(cone_volume[coney,:,:]).mean(axis=1)
-
-                            # how representitive is it?
-                            aline_corr = np.corrcoef(np.vstack((cut_profile[z1:z2+1],cone_profile[z1:z2+1])))[0,1]
-
-                            peaks = utils.find_peaks(cut_profile)
-                            heights = cut_profile[peaks]/cut_profile.std()
-                            isos_dpeaks = np.abs(peaks-isos_guess)
-                            isos_dpeaks[np.where(isos_dpeaks>=max_displacement)] = 2**16
-                            isos_scores = heights - isos_dpeaks
-
-                            cost_dpeaks = np.abs(peaks-cost_guess)
-                            cost_dpeaks[np.where(cost_dpeaks>=max_displacement)] = 2**16
-                            cost_scores = heights - cost_dpeaks
-
-                            isos_peak = peaks[np.argmax(isos_scores)]
-                            cost_peak = peaks[np.argmax(cost_scores)]
-
-                            dpeaks.append(cost_peak-isos_peak)
-                            aline_corrs.append(aline_corr)
-                            
-                            if do_plot:
-                                plt.subplot(5,3,idx*3+1)
-                                plt.imshow(np.mean(np.abs(cone_volume),axis=0),cmap='gray',aspect='normal')
-                                plt.ylim((cost_guess+4,isos_guess-4))
-                                #plt.ylim((cost_guess-5,isos_guess+5))
-                                plt.subplot(5,3,idx*3+2)
-                                plt.imshow(np.mean(np.abs(cone_volume),axis=2).T,cmap='gray',aspect='normal')
-                                plt.ylim((cost_guess+4,isos_guess-4))
-                                #plt.ylim((cost_guess-5,isos_guess+5))
-
-                                plt.subplot(5,3,idx*3+3)
-                                plt.plot(cut_profile)
-                                plt.plot(cone_profile)
-                                plt.axvline(isos_guess,color='g')
-                                plt.axvline(cost_guess,color='g')
-                                plt.axvline(isos_peak,color='r')
-                                plt.axvline(cost_peak,color='r')
-                                plt.xlim((isos_guess-4,cost_guess+4))
-                                #print cost_peak-isos_peak,aline_corr
-
-                        # computed weighted average of dpeaks:
-                        aline_corrs = np.array(aline_corrs)
-                        dz = int(np.sum(dpeaks*aline_corrs)/np.sum(aline_corrs))
-
-                        #probe = np.zeros(z2-z1+1)
-                        #probe[0] = 1.0
-                        #probe[weighted_average] = 1.0
-
-                        def mysum(x,y):
-                            return x+y
-                            #return (x+y)/2.0
-                            #return x+y+np.sqrt(x*y)
-
-                        def unwrap(vec,n=0):
-                            vec2 = vec.copy()
-                            vec2[np.argmin(vec2)] = vec2[np.argmin(vec2)]+2*np.pi
-                            if np.var(vec)<np.var(vec2) or n>=len(vec):
-                                return vec
-                            else:
-                                return unwrap(vec2,n+1)
-                            
-                        colors = 'rgbkcym'
-                        plt.cla()
-                        sheet = []
-                        unaligned_sheet = []
-                        for idx,coney in enumerate(range(sy)):
-                            color = colors[idx%len(colors)]
-                            cut_profile = np.abs(cone_volume[coney,:,:]).mean(axis=1)
-                            #shift,corr = utils.nxcorr(cut_profile[z1:z2+1],probe)
-                            totals = []
-                            zrange = np.arange(z1,z1+6)
-                            for k in zrange:
-                                totals.append(mysum(cut_profile[k],cut_profile[k+dz]))
-
-                            plt.plot(zrange,totals,'%s-'%color)
-                            
-                            isos = z1+np.argmax(totals)
-                            cost = isos+dz
-                            cut = cone_volume[coney,isos-3:cost+4,:]
-                            sheet.append(cut)
-
-                            unaligned_cut = cone_volume[coney,z1:z2,:]
-                            unaligned_sheet.append(unaligned_cut)
-                            
-
-                        sheet = np.hstack(sheet)
-                        unaligned_sheet = np.hstack(unaligned_sheet)
-
-                        uamplitude = np.abs(unaligned_sheet)
-                        
-                        amplitude = np.abs(sheet)
-                        phase = np.angle(sheet)
-
-                        for row in [4,-4]:
-                            phase[row] = unwrap(phase[row])
-                        
-                        mamp = amplitude.mean(axis=0)
-                        valid = np.where(mamp>mamp.mean())[0]
-                        
-                        isos_phase = phase[3,:]
-                        phase = (phase-isos_phase)%(2*np.pi)
-                        phase_std = phase[:,valid].std(axis=1)
-
-                        plt.subplot(2,2,1)
-                        plt.imshow(amplitude,cmap='gray')
-                        plt.colorbar()
-
-                        plt.subplot(2,2,2)
-                        plt.imshow(uamplitude,cmap='gray')
-                        plt.colorbar()
-                        
-                        plt.subplot(2,2,3)
-                        plt.imshow(phase,cmap='jet')
-                        plt.colorbar()
-                        
-                        plt.subplot(2,2,4)
-                        plt.plot(phase_std)
-                        plt.show()
-                            
                             
                 
     def get_subvol(self,vol,x,y,z,xrad=0,yrad=0,zrad=0):

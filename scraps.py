@@ -1,3 +1,197 @@
+    def find_corresponding_images_old(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
+        
+        fkeys = self.h5['/frames'].keys()
+        for fk in fkeys:
+            dataset_fn = os.path.join(self.working_directory,fk)
+            dataset_h5 = H5(dataset_fn)
+            ikeys = self.h5['/frames'][fk].keys()
+            for ik in ikeys:
+                vol = dataset_h5['/flattened_data'][int(ik),:,:,:]
+                cost_depths = dataset_h5['model/volume_labels/COST'][int(ik),:,:]
+                isos_depths = dataset_h5['model/volume_labels/ISOS'][int(ik),:,:]
+
+                x = self.h5['/frames'][fk][ik]['x_shifts'][:]
+                y = self.h5['/frames'][fk][ik]['y_shifts'][:]
+                c = self.h5['/frames'][fk][ik]['correlations'][:]
+                g = self.h5['/frames'][fk][ik]['goodnesses'][:]
+
+                model_profile = dataset_h5['model/profile'][:]
+                model_isos = dataset_h5['model/labels/ISOS'].value
+                model_cost = dataset_h5['model/labels/COST'].value
+                yramp = np.arange(len(y)) - y
+                # yramp[n] is now the location of the nth target row in the reference space
+                # so we need to find n such that yramp[n]-pty is minimized
+
+                if do_plot:
+                    plt.subplot(1,2,1)
+                    plt.imshow(self.reference,cmap='gray',interpolation='none')
+                # # quickly project the target volume
+                cmed = int(np.median(cost_depths))
+                imed = int(np.median(isos_depths))
+                # aproj = np.mean(np.mean(np.abs(vol),axis=2),axis=0)
+                # plt.plot(aproj)
+                # plt.axvline(imed)
+                # plt.axvline(cmed)
+                # plt.title('%d,%d'%(imed,cmed))
+                # plt.show()
+                # continue
+                proj = np.abs(vol[:,imed-2:cmed+2,:]).mean(axis=1)
+
+                if do_plot:
+                    plt.subplot(1,2,2)
+                    plt.imshow(proj,cmap='gray',interpolation='none')
+                    colors = 'rgbcymkw'
+
+                plt.figure(figsize=(18,9))
+                for idx,(ptx,pty) in enumerate(points):
+                    if do_plot:
+                        color = colors[idx%len(colors)]
+                        plt.subplot(1,2,1)
+                        plt.plot(ptx,pty,'%so'%color)
+                    yerr = np.abs(pty-yramp)
+                    match_index = np.argmin(yerr)
+                    if do_plot:
+                        plt.title(g[match_index])
+                    if yerr[match_index]<=match_radius and g[match_index]>minimum_goodness:
+                        yout = int(match_index)
+                        xout = int(ptx + x[match_index])
+                        xout,yout = utils.ascend2d(proj,xout,yout,do_plot=False)
+                        
+                        cone_volume = self.get_subvol(vol,yout,0,xout,output_radius,np.inf,output_radius)
+
+                        cone_profile = np.mean(np.mean(np.abs(cone_volume),axis=2),axis=0)
+
+                        # let's try to label this cone's peaks
+                        shift,corr = utils.nxcorr(model_profile,cone_profile)
+                        isos_guess = int(model_isos + shift)
+                        cost_guess = int(model_cost + shift)
+
+                        z1 = isos_guess-3
+                        z2 = cost_guess+3
+                        
+                        sy,sz,sx = cone_volume.shape
+
+                        aline_corrs = []
+                        dpeaks = []
+                        
+                        for idx,coney in enumerate(range(sy)):
+                            
+                            max_displacement = 4
+                            cut_profile = np.abs(cone_volume[coney,:,:]).mean(axis=1)
+
+                            # how representitive is it?
+                            aline_corr = np.corrcoef(np.vstack((cut_profile[z1:z2+1],cone_profile[z1:z2+1])))[0,1]
+
+                            peaks = utils.find_peaks(cut_profile)
+                            heights = cut_profile[peaks]/cut_profile.std()
+                            isos_dpeaks = np.abs(peaks-isos_guess)
+                            isos_dpeaks[np.where(isos_dpeaks>=max_displacement)] = 2**16
+                            isos_scores = heights - isos_dpeaks
+
+                            cost_dpeaks = np.abs(peaks-cost_guess)
+                            cost_dpeaks[np.where(cost_dpeaks>=max_displacement)] = 2**16
+                            cost_scores = heights - cost_dpeaks
+
+                            isos_peak = peaks[np.argmax(isos_scores)]
+                            cost_peak = peaks[np.argmax(cost_scores)]
+
+                            dpeaks.append(cost_peak-isos_peak)
+                            aline_corrs.append(aline_corr)
+                            
+                            if do_plot:
+                                plt.subplot(5,3,idx*3+1)
+                                plt.imshow(np.mean(np.abs(cone_volume),axis=0),cmap='gray',aspect='normal')
+                                plt.ylim((cost_guess+4,isos_guess-4))
+                                #plt.ylim((cost_guess-5,isos_guess+5))
+                                plt.subplot(5,3,idx*3+2)
+                                plt.imshow(np.mean(np.abs(cone_volume),axis=2).T,cmap='gray',aspect='normal')
+                                plt.ylim((cost_guess+4,isos_guess-4))
+                                #plt.ylim((cost_guess-5,isos_guess+5))
+
+                                plt.subplot(5,3,idx*3+3)
+                                plt.plot(cut_profile)
+                                plt.plot(cone_profile)
+                                plt.axvline(isos_guess,color='g')
+                                plt.axvline(cost_guess,color='g')
+                                plt.axvline(isos_peak,color='r')
+                                plt.axvline(cost_peak,color='r')
+                                plt.xlim((isos_guess-4,cost_guess+4))
+                                #print cost_peak-isos_peak,aline_corr
+
+                        # computed weighted average of dpeaks:
+                        aline_corrs = np.array(aline_corrs)
+                        dz = int(np.sum(dpeaks*aline_corrs)/np.sum(aline_corrs))
+
+                        #probe = np.zeros(z2-z1+1)
+                        #probe[0] = 1.0
+                        #probe[weighted_average] = 1.0
+
+                        def mysum(x,y):
+                            return x+y
+                            #return (x+y)/2.0
+                            #return x+y+np.sqrt(x*y)
+                        colors = 'rgbkcym'
+                        plt.cla()
+                        sheet = []
+                        unaligned_sheet = []
+                        for idx,coney in enumerate(range(sy)):
+                            color = colors[idx%len(colors)]
+                            cut_profile = np.abs(cone_volume[coney,:,:]).mean(axis=1)
+                            #shift,corr = utils.nxcorr(cut_profile[z1:z2+1],probe)
+                            totals = []
+                            zrange = np.arange(z1,z1+6)
+                            for k in zrange:
+                                totals.append(mysum(cut_profile[k],cut_profile[k+dz]))
+
+                            plt.plot(zrange,totals,'%s-'%color)
+                            
+                            isos = z1+np.argmax(totals)
+                            cost = isos+dz
+                            cut = cone_volume[coney,isos-3:cost+4,:]
+                            sheet.append(cut)
+
+                            unaligned_cut = cone_volume[coney,z1:z2,:]
+                            unaligned_sheet.append(unaligned_cut)
+                            
+
+                        sheet = np.hstack(sheet)
+                        unaligned_sheet = np.hstack(unaligned_sheet)
+
+                        uamplitude = np.abs(unaligned_sheet)
+                        
+                        amplitude = np.abs(sheet)
+                        phase = np.angle(sheet)
+
+                        for row in [4,-4]:
+                            phase[row] = unwrap(phase[row])
+                        
+                        mamp = amplitude.mean(axis=0)
+                        valid = np.where(mamp>mamp.mean())[0]
+                        
+                        isos_phase = phase[3,:]
+                        phase = (phase-isos_phase)%(2*np.pi)
+                        phase_std = phase[:,valid].std(axis=1)
+
+                        plt.subplot(2,2,1)
+                        plt.imshow(amplitude,cmap='gray')
+                        plt.colorbar()
+
+                        plt.subplot(2,2,2)
+                        plt.imshow(uamplitude,cmap='gray')
+                        plt.colorbar()
+                        
+                        plt.subplot(2,2,3)
+                        plt.imshow(phase,cmap='jet')
+                        plt.colorbar()
+                        
+                        plt.subplot(2,2,4)
+                        plt.plot(phase_std)
+                        plt.show()
+
+
+
+
+
                         # scan through the volume and check correlation w/ en face projection to identify
                         # most likely cone layers
                         efp = np.median(np.abs(output_volume[:,isos_guess-2:cost_guess+2,:]),axis=1)
