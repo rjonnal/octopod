@@ -4,7 +4,7 @@ HDF5 to SQL, we could implement it quickly.
 '''
 
 import h5py
-import os,sys
+import os,sys,glob
 import shutil
 import logging
 import numpy as np
@@ -80,7 +80,7 @@ class DataStore:
             output (Numpy array): an interface into the desired array
         '''
 
-
+        
 class H5(DataStore):
     
     def __init__(self,filename,mode='w'):
@@ -224,5 +224,121 @@ class H5(DataStore):
             sys.exit()
         try:
             del self.h5[key]
+        except Exception as e:
+            pass
+
+class Hive(DataStore):
+    
+    def __init__(self,root_location,mode='w'):
+        self.logger = logging.getLogger(__name__)
+        self.root_location = root_location
+        self.mode = mode
+        try:
+            os.makedirs(self.root_location)
+            self.logger.info('Creating Hive at %s.'%self.root_location)
+        except Exception as e:
+            if os.path.exists(self.root_location):
+                self.logger.info('Using existing Hive at %s.'%self.root_location)
+            else:
+                sys.exit(e)
+        
+    def move(self,src,dest):
+        self.logger.info('move: moving %s -> %s'%(src,dest))
+        try:
+            shutil.move(src,dest)
+        except Exception as e:
+            self.logger.error(e)
+            sys.exit(e)
+
+    def repack(self):
+        pass
+
+    def keys(self):
+        return glob.glob(os.path.join(self.root_location,'*'))
+
+    def print_helper(self,thing,depth=0,max_depth=np.inf):
+        if depth>=max_depth:
+            return
+        try:
+            thingkeys = glob.glob(os.path.join(thing,'*'))
+            print thingkeys
+            for key in thingkeys:
+                try:
+                    print '\t'*depth,key,':',
+                    self.print_helper(os.path.join(os.path.join(thing,key),'*'),depth+1,max_depth)
+                except:
+                    pass
+        except:
+            print '(leaf)',thing
+
+    def catalog(self,max_depth=np.inf):
+        print 'Catalog:'
+        self.print_helper(self.root_location,max_depth=max_depth)
+        print
+        
+    def has(self,key):
+        return os.path.exists(os.path.join(self.root_location,key+'.npy'))
+    
+    def __getitem__(self,key):
+        if key[0]=='/':
+            key = key[1:]
+        fn = os.path.join(self.root_location,key)
+        if os.path.exists(fn+'.npy'):
+            return np.load(fn+'.npy')
+        else:
+            return Hive(fn)
+
+    def put(self,location,data,short_descriptor=None,overwrite=False):
+        if location[0]=='/':
+            location = location[1:]
+
+        if type(data)==list:
+            data = np.array(data)
+        elif not type(data)==np.ndarray:
+            data = np.array([data])
+            
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot put. Exiting.'%self.mode)
+            sys.exit()
+            
+        fn = os.path.join(self.root_location,location)+'.npy'
+
+        if os.path.exists(fn) and not overwrite:
+            self.logger.info('%s already exists; to overwrite call Hive.put with overwrite=True.'%location)
+            return
+
+        path,shortfn = os.path.split(fn)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        
+        try:
+            os.remove(fn)
+        except Exception as e:
+            self.logger.info(e)
+
+        np.save(fn,data)
+        if short_descriptor is not None:
+            txtfn = os.path.join(self.root_location,location)+'.txt'
+            with open(txtfn,'wb') as fid:
+                fid.write(short_descriptor)
+        self.logger.info('Putting %s (%s,%s) into H5 file at %s.'%(type(data),list(data.shape),data.dtype,location))
+
+
+    def get_shape(self,location):
+        return self[location].shape
+    
+    def get(self,location):
+        return self[location]
+    
+    def close(self):
+        pass
+    
+    def delete(self,key):
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot delete. Exiting.'%self.mode)
+            sys.exit()
+        fn = os.path.join(self.root_location,key)+'.npy'
+        try:
+            os.remove(fn)
         except Exception as e:
             pass
