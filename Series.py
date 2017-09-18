@@ -6,10 +6,76 @@ import glob
 from scipy.ndimage import zoom
 from scipy.interpolate import griddata
 from scipy.signal import fftconvolve,medfilt
+from scipy.optimize import curve_fit
 from scipy.io import savemat
 from clicky import collector
 import matplotlib.colors as colors
 import matplotlib.cm as cmx
+
+
+
+class Cone:
+
+    def __init__(self,vol,isos_idx,cost_idx,x,y,origin='',x0=None,y0=None,properties={}):
+        """This class stores information about a single cone. Required
+        parameters are a 3D array representing the cone's reflectivity;
+        indices of the ISOS and COST reflections; the x and y
+        coordinates of the cone in the reference coordinate
+        space. Optional params are a string describing the cone's
+        original data set (e.g. the dataset tag and volume index); x0
+        and y0, the coordinates of the cone in its original volume; and
+        a dictionary of other properties, e.g. whether the cone had been
+        stimulated or not, its spectral class, etc."""
+        
+        self.iidx = isos_idx
+        self.cidx = cost_idx
+        self.vol = vol
+        self.x = x
+        self.y = y
+        self.origin = origin
+        self.x0 = x0
+        self.y0 = y0
+        self.properties = properties
+        self.prof = np.mean(np.mean(np.abs(vol),1),0)
+
+    def gaussian_mixture_model(self,do_plot=False):
+
+        if do_plot:
+            plt.figure()
+        def gmm(x,x0,x1,s0,s1,a0,a1):
+            XX0 = np.arange(len(x)) - x0
+            XX1 = np.arange(len(x)) - x1
+            y0 = np.exp(-(XX0**2)/(2*s0**2))*a0
+            y1 = np.exp(-(XX1**2)/(2*s1**2))*a1
+            if do_plot:
+                plt.cla()
+                plt.plot(x,y0+y1)
+                plt.plot(x,self.prof)
+                plt.pause(.0001)
+            return y0+y1
+
+        # initial guess:
+        p_a0 = self.prof[self.iidx]
+        p_a1 = self.prof[self.cidx]
+        p_s0 = 1.0
+        p_s1 = 1.0
+        p_x0 = self.iidx
+        p_x1 = self.cidx
+        p = [p_x0,p_x1,p_s0,p_s1,p_a0,p_a1]
+        lower = [p_x0-1.0,p_x1-1.0,0.1,0.1,p_a0*.75,p_a1*.75]
+        upper = [p_x0+1.0,p_x1+1.0,3.0,3.0,p_a0*1.25,p_a1*1.25]
+        #bounds = (lower,upper)
+        
+        aa,bb = curve_fit(gmm,np.arange(len(self.prof)),self.prof,p0=p)
+        
+        if do_plot:
+            plt.close()
+
+        print 'bye'
+        return aa,bb
+        
+        
+
 
 class Series:
 
@@ -99,6 +165,19 @@ class Series:
                         except Exception as e:
                             print e
                             continue
+
+                        # get some overall stats of the volume
+                        # we'll write these to the hdf5 file later
+                        avol = np.abs(cone_volume)
+                        aprof = np.mean(np.mean(avol,axis=2),axis=0)
+                        noise_floor = aprof[np.argsort(aprof)[:10]]
+                        noise_mean = noise_floor.mean()
+                        noise_std = noise_floor.std()
+                        full_volume_mean = avol.mean()
+                        full_volume_std = avol.std()
+                        full_profile_mean = aprof.mean()
+                        full_profile_std = aprof.std()
+                        
                         
                         # let's try to label this cone's peaks
                         #print 'mp',model_profile
@@ -142,14 +221,48 @@ class Series:
                         os_length = cost_guess-isos_guess
                         key_root = '/cone_catalog/%s/%s/%s'%(point_string,fk,ik)
 
+
+                        c = Cone(sheet,border,border+os_length,ptx,pty)
+
+                        try:
+                            fit,fit_covar = c.gaussian_mixture_model(True)
+                        except Exception as e:
+                            print e
+                            fit,fit_covar = c.gaussian_mixture_model(True)
+                            
+                        fit_isos_z,fit_cost_z,fit_isos_sigma,fit_cost_sigma,fit_isos_amplitude,fit_cost_amplitude = fit
+                        
+                        perr = np.sqrt(np.diag(fit_covar))
+                        fit_isos_z_error,fit_cost_z_error,fit_isos_sigma_error,fit_cost_sigma_error,fit_isos_amplitude_error,fit_cost_amplitude_error = perr
+
                         self.h5.put('%s/x'%key_root,xout)
+                        print 'hi'
                         self.h5.put('%s/y'%key_root,yout)
+                        print 'hi'
                         self.h5.put('%s/isos_z'%key_root,border)
+                        print 'hi'
                         self.h5.put('%s/cost_z'%key_root,border+os_length)
                         self.h5.put('%s/cone_volume'%key_root,sheet)
-                    print
-                        
+                        self.h5.put('%s/noise_mean'%key_root,noise_mean)
+                        self.h5.put('%s/noise_std'%key_root,noise_std)
+                        self.h5.put('%s/full_volume_mean'%key_root,full_volume_mean)
+                        self.h5.put('%s/full_volume_std'%key_root,full_volume_std)
+                        self.h5.put('%s/full_profile_mean'%key_root,full_profile_mean)
+                        self.h5.put('%s/full_profile_std'%key_root,full_profile_std)
+                        self.h5.put('%s/fit/isos_z'%key_root,fit_isos_z)
+                        self.h5.put('%s/fit/cost_z'%key_root,fit_cost_z)
+                        self.h5.put('%s/fit/isos_sigma'%key_root,fit_isos_sigma)
+                        self.h5.put('%s/fit/cost_sigma'%key_root,fit_cost_sigma)
+                        self.h5.put('%s/fit/isos_amplitude'%key_root,fit_isos_amplitude)
+                        self.h5.put('%s/fit/cost_amplitude'%key_root,fit_cost_amplitude)
+                        self.h5.put('%s/fit/isos_z_error'%key_root,fit_isos_z_error)
+                        self.h5.put('%s/fit/cost_z_error'%key_root,fit_cost_z_error)
+                        self.h5.put('%s/fit/isos_sigma_error'%key_root,fit_isos_sigma_error)
+                        self.h5.put('%s/fit/cost_sigma_error'%key_root,fit_cost_sigma_error)
+                        self.h5.put('%s/fit/isos_amplitude_error'%key_root,fit_isos_amplitude_error)
+                        self.h5.put('%s/fit/cost_amplitude_error'%key_root,fit_cost_amplitude_error)
 
+                        
     def get_n_volumes(self):
         count = 0
         fkeys = self.h5['/frames'].keys()
@@ -175,26 +288,26 @@ class Series:
     
     def get_n_cones(self):
         try:
-            n_cones = self.h5['cone_catalog/n_cones'].value
+            n_cones = self.h5['cone_catalog/globals/n_cones'].value
         except Exception as e:
             cone_catalog = self.h5['cone_catalog']
             cone_keys = cone_catalog.keys()
             n_cones = len(cone_keys)
-            self.h5.put('/cone_catalog/n_cones',n_cones)
+            self.h5.put('/cone_catalog/globals/n_cones',n_cones)
         return n_cones
     
     def get_cone_volume_size(self):
         fast_maxes = []
         try:
-            slow_max = self.h5['cone_catalog/slow_max'].value
-            fast_max = self.h5['cone_catalog/fast_max'].value
-            depth_max = self.h5['cone_catalog/depth_max'].value
+            slow_max = self.h5['cone_catalog/globals/slow_max'].value
+            fast_max = self.h5['cone_catalog/globals/fast_max'].value
+            depth_max = self.h5['cone_catalog/globals/depth_max'].value
         except Exception as e:
             cone_catalog = self.h5['cone_catalog']
             cone_keys = cone_catalog.keys()
             slow_max,fast_max,depth_max = 0,0,0
             for ck in cone_keys:
-                if ck in ['slow_max','fast_max','depth_max','n_cones']:
+                if ck in ['globals']:
                     continue
                 frame_keys = cone_catalog['%s'%ck].keys()
                 for fk in frame_keys:
@@ -212,9 +325,9 @@ class Series:
                             depth_max = dims[2]
                         fast_maxes.append(dims[1])
                         
-            self.h5.put('/cone_catalog/slow_max',slow_max)
-            self.h5.put('/cone_catalog/fast_max',fast_max)
-            self.h5.put('/cone_catalog/depth_max',depth_max)
+            self.h5.put('/cone_catalog/globals/slow_max',slow_max)
+            self.h5.put('/cone_catalog/globals/fast_max',fast_max)
+            self.h5.put('/cone_catalog/globals/depth_max',depth_max)
         return slow_max,fast_max,depth_max
                     
         
@@ -233,7 +346,8 @@ class Series:
             dpi = 100.0
             outx = 800.0/dpi
             outy = outx/ar
-            plt.figure(figsize=(outx,outy))
+            plt.figure(2)
+            plt.figure(1,figsize=(outx,outy))
             plt.axes([0,0,1,1])
             plt.imshow(av,clim=clim,cmap='gray',interpolation='none')
             plt.autoscale(False)
@@ -271,10 +385,19 @@ class Series:
                 index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
                 for ik in index_keys:
                     vol = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)][:,:,:]
+                    
                     isos_depth = cone_catalog['%s/%s/%s/isos_z'%(ck,fk,ik)].value
                     cost_depth = cone_catalog['%s/%s/%s/cost_z'%(ck,fk,ik)].value
+
                     x = cone_catalog['%s/%s/%s/x'%(ck,fk,ik)].value
                     y = cone_catalog['%s/%s/%s/y'%(ck,fk,ik)].value
+                    cone_origin = '%s_%s'%(fk,ik)
+                    xy0 = ck.split('_')
+                    x0 = int(xy0[0])
+                    y0 = int(xy0[1])
+
+                    c = Cone(vol,isos_depth,cost_depth,x,y,cone_origin,x0,y0)
+                    
                     isos = vol[:,:,isos_depth].ravel()
                     cost = vol[:,:,cost_depth].ravel()
                     
@@ -307,12 +430,87 @@ class Series:
             pv = np.nanvar(stim_d_phase)/np.nanvar(no_stim_d_phase)
             print x0,y0,np.var(no_stim_d_phase),np.nanvar(stim_d_phase),pv
             if do_plot and pv>0.01:
+                plt.figure(1)
                 lu = min(1.0,-np.log(np.var(stim_d_phase)))
                 colorVal = scalarMap.to_rgba(lu)
                 plt.plot(x0*3,y0*3,marker='o',color=colorVal,alpha=0.5,markersize=10)
                 
         if do_plot:
             outfn = '%s_marked_average.png'%self.tag
+            plt.figure(1)
+            plt.savefig(outfn)
+            plt.show()
+            
+    def fit_cones(self):
+        
+        cone_catalog = self.h5['cone_catalog']
+        cone_keys = cone_catalog.keys()
+        
+        for cone_index,ck in enumerate(cone_keys):
+            if ck in ['slow_max','fast_max','depth_max','n_cones']:
+                continue
+            frame_keys = cone_catalog['%s'%ck].keys()
+
+            coords = ck.split('_')
+            x = int(coords[0])
+            y = int(coords[1])
+            
+            for fk in frame_keys:
+                    
+                index_keys = cone_catalog['%s/%s'%(ck,fk)].keys()
+                for ik in index_keys:
+                    vol = cone_catalog['%s/%s/%s/cone_volume'%(ck,fk,ik)][:,:,:]
+                    
+                    isos_depth = cone_catalog['%s/%s/%s/isos_z'%(ck,fk,ik)].value
+                    cost_depth = cone_catalog['%s/%s/%s/cost_z'%(ck,fk,ik)].value
+
+                    x0 = cone_catalog['%s/%s/%s/x'%(ck,fk,ik)].value
+                    y0 = cone_catalog['%s/%s/%s/y'%(ck,fk,ik)].value
+                    cone_origin = '%s_%s'%(fk,ik)
+
+                    c = Cone(vol,isos_depth,cost_depth,x,y,cone_origin,x0,y0)
+
+                    
+                    isos = vol[:,:,isos_depth].ravel()
+                    cost = vol[:,:,cost_depth].ravel()
+                    
+                    
+                    isos_phase = np.angle(isos)
+                    cost_phase = np.angle(cost)
+                    isos_amp = np.abs(isos)
+                    cost_amp = np.abs(cost)
+                    isos_real = np.real(isos)
+                    cost_real = np.real(cost)
+                    isos_imag = np.imag(isos)
+                    cost_imag = np.imag(cost)
+
+                    
+                    amp = (isos_amp+cost_amp)/2.0
+
+                    valid = np.where(amp>amp.mean()-0*amp.std())[0]
+                    d_phase = (cost_phase-isos_phase)
+                    d_phase = utils.unwrap(d_phase)
+                    d_phase_median = np.median(d_phase[valid])
+
+                    
+                    if stimulus:
+                        stim_d_phase.append(d_phase_median)
+                    else:
+                        no_stim_d_phase.append(d_phase_median)
+
+                    
+                    #print x0,y0,x,y,fk,ik,stimulus,d_phase_median
+            pv = np.nanvar(stim_d_phase)/np.nanvar(no_stim_d_phase)
+            print x0,y0,np.var(no_stim_d_phase),np.nanvar(stim_d_phase),pv
+            if do_plot and pv>0.01:
+                plt.figure(1)
+                lu = min(1.0,-np.log(np.var(stim_d_phase)))
+                colorVal = scalarMap.to_rgba(lu)
+                plt.plot(x0*3,y0*3,marker='o',color=colorVal,alpha=0.5,markersize=10)
+                
+        if do_plot:
+            outfn = '%s_marked_average.png'%self.tag
+            plt.figure(1)
             plt.savefig(outfn)
             plt.show()
             
@@ -325,7 +523,8 @@ class Series:
         y2 = int(self.h5['/reference_coordinates/y2'].value*3)
         av = av[2:,x1-90:x1+510]
         return av
-    
+
+
     def make_big_sheet(self,phase=False,sort_by_nvol=True):
         volume_dictionary = self.get_volume_dictionary()
         

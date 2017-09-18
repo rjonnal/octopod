@@ -11,6 +11,7 @@ fn = os.path.join(wdir,'reg_14_27_33-2.0T_0.0S_no_stimulus_1_000.hdf5')
 s = Series(fn)
 
 try:
+    fudge
     cone_catalog = s.h5['cone_catalog']
 except Exception as e:
     print e
@@ -28,7 +29,7 @@ except Exception as e:
     s.make_cone_catalog(points)
 
 #s.make_big_sheet(phase=False)
-s.analyze_cone_phase()
+#s.analyze_cone_phase()
 #s.crop_average_to_reference()
 sys.exit()
 
