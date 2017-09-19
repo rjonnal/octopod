@@ -2,7 +2,7 @@ import os,sys
 from bs4 import BeautifulSoup
 from datetime import datetime
 import logging
-from octopod.DataStore import H5
+from octopod.DataStore import H5,Hive
 
 class AcquisitionParameterFile:
     
@@ -49,6 +49,28 @@ class AcquisitionParameterFile:
                         self.logger.error(e)
                         sys.exit('Unrecoverable error: %s'%e)
 
+    def translate_xml_to_hive(self,fn,hive):
+        self.logger.info('Creating "config" group in hive.')
+
+        # take this out--do we ever use the filename?
+        #h5.write_attribute('config','filename',fn)
+
+        fid = open(fn,'rb')
+        soup = BeautifulSoup(fid.read(),"html.parser")
+        headings = ['time','volume_size','scanning_parameters','dispersion_parameters']
+        for heading in headings:
+            xml_list = soup.findAll(heading)
+            for xml in xml_list:
+                keys = xml.attrs.keys()
+                for key in keys:
+                    try:
+                        hivekey,op = self.xml_dict[key]
+                        hiveval = op(xml.attrs[key])
+                        hive.put('config/%s'%hivekey,hiveval)
+                        self.logger.info('Setting variable %s to %s.'%(hivekey,hiveval))
+                    except Exception as e:
+                        self.logger.error(e)
+                        sys.exit('Unrecoverable error: %s'%e)
 
     def params_to_xml(self,category_dict):
         """category_dict is a dictionary of dictionaries. Keys should be the headings

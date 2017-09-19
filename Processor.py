@@ -1,5 +1,5 @@
 import sys,os
-from octopod.Misc import H5
+from octopod.DataStore import H5
 import logging
 import numpy as np
 import scipy as sp

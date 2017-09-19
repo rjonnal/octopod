@@ -6,7 +6,7 @@ import logging
 import octopod_config as ocfg
 
 from octopod.AcquisitionParameterFile import AcquisitionParameterFile
-from octopod.DataStore import Hive
+from octopod.DataStore import H5
 from octopod.Misc import EccentricityGuesser, IDGenerator
 from octopod.Processor import OCTProcessor
 from octopod.DispersionOptimizer import DispersionOptimizer
@@ -25,48 +25,47 @@ class Dataset:
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating Dataset based on %s.'%raw_data_filename)
         raw_temp,raw_extension = os.path.splitext(self.raw_data_filename)
-        self.hive_fn = raw_temp
-        if self.hive_fn==self.raw_data_filename:
-            sys.exit('Error: cannot create Hive with same name as raw data set.')
+        self.h5fn = raw_temp + '.hdf5'
         self.xml_fn = raw_temp + '.xml'
         if not os.path.exists(self.xml_fn):
+            print 'uh oh'
             xml_temp = raw_temp
             xml_temp = '_'.join(xml_temp.split('_')[:-1])+'.xml'
             if os.path.exists(xml_temp):
                 self.logger.info('Could not locate %s.\nUsing %s instead.'%(self.xml_fn,xml_temp))
                 self.xml_fn = xml_temp
-        self.hive = Hive(self.hive_fn)
+        self.h5 = H5(self.h5fn)
 
 
     def add_slo_frames(self,flist):
         """Create a Dataset object from a series of SLO frames.
         This method is modeled slightly after Dataset.initialize, below."""
-        self.hive.put('/config/n_vol',len(flist))
-        self.hive.put('/config/n_slow',512)
-        self.hive.put('/config/n_fast',512)
-        self.hive.put('/config/n_depth',1)
+        self.h5.put('/config/n_vol',len(flist))
+        self.h5.put('/config/n_slow',512)
+        self.h5.put('/config/n_fast',512)
+        self.h5.put('/config/n_depth',1)
 
         
-        n_vol = self.hive.get('/config/n_vol')[()]
-        n_slow = self.hive.get('/config/n_slow')[()]
-        n_fast = self.hive.get('/config/n_fast')[()]
+        n_vol = self.h5.get('/config/n_vol')[()]
+        n_slow = self.h5.get('/config/n_slow')[()]
+        n_fast = self.h5.get('/config/n_fast')[()]
 
-        raw_store = self.hive.make('projections/SLO',(n_vol,n_slow,n_fast),dtype='f8')
+        raw_store = self.h5.make('projections/SLO',(n_vol,n_slow,n_fast),dtype='f8')
 
         for vol_index,f in enumerate(flist):
             im = sp.misc.imread(f).astype(np.float)
             raw_store[vol_index,:,:] = im
 
-    def get_hive_handle(self):
-        return self.hive
+    def get_h5_handle(self):
+        return self.h5
 
-    def ecc_to_hive(self):
+    def ecc_to_h5(self):
         eg = EccentricityGuesser()
         si_ecc,nt_ecc = eg.guess(self.raw_data_filename)
-        self.hive.delete('eccentricity')
-        self.hive.put('eccentricity/superior_inferior',si_ecc)
-        self.hive.put('eccentricity/nasal_temporal',nt_ecc)
-        self.hive.put('eccentricity/superior_and_nasal_are_negative',[np.nan])
+        self.h5.delete('eccentricity')
+        self.h5.put('eccentricity/superior_inferior',si_ecc)
+        self.h5.put('eccentricity/nasal_temporal',nt_ecc)
+        self.h5.put('eccentricity/superior_and_nasal_are_negative',[np.nan])
         
 
     def get_acquisition_date(self):
@@ -88,22 +87,22 @@ class Dataset:
             self.logger.warning('No subject_name.txt file found. Using doe_john.')
             sn = 'doe_john'
             
-        #idg.create_ids(self.hive,sn,at)
+        idg.create_ids(self.h5,sn,at)
 
     def process(self):
-        op = OCTProcessor(self.hive)
+        op = OCTProcessor(self.h5)
         op.run()
 
     def optimize_dispersion(self,n_lines=200,do_plot=False):
-        do = DispersionOptimizer(self.hive)
+        do = DispersionOptimizer(self.h5)
         do.optimize(n_lines=n_lines,do_plot=do_plot)
 
     def flip(self):
-        f = Flipper(self.hive)
+        f = Flipper(self.h5)
         f.flip()
 
     def show(self):
-        vols = self.hive.get('/processed_data')[:]
+        vols = self.h5.get('/processed_data')[:]
         nv,ns,nd,nf = vols.shape
         subvol = vols[0,:10,:,:]
         test = np.mean(np.abs(subvol),axis=0)
@@ -118,27 +117,27 @@ class Dataset:
         
 
     def crop(self):
-        c = Cropper(self.hive)
+        c = Cropper(self.h5)
         c.crop()
 
     def model(self,keys=['ELM','ISOS','COST','RPE']):
-        m = Model(self.hive)
+        m = Model(self.h5)
         m.click_label(keys=keys)
 
     def align(self,do_plot=False):
-        bsa = BScanAligner(self.hive)
+        bsa = BScanAligner(self.h5)
         bsa.align_volumes(do_plot=do_plot)
 
 
     def label(self):
-        m = Model(self.hive,data_block='flattened_data')
+        m = Model(self.h5,data_block='flattened_data')
         m.write_axial_alignment()
         m.write_volume_labels()
 
 
     def report(self,do_log=False):
-        report_directory = self.hive.filename.replace('.hdf5','')+'_report'
-        r = Reporter(self.hive,report_directory=report_directory)
+        report_directory = self.h5.filename.replace('.hdf5','')+'_report'
+        r = Reporter(self.h5,report_directory=report_directory)
         try:
             r.processed_report(do_log=do_log)
         except Exception as e:
@@ -160,18 +159,17 @@ class Dataset:
             
     def initialize(self,system_label):
 
-        # write parameters from the XML file to the hive file
+        # write parameters from the XML file to the h5 file
         apf = AcquisitionParameterFile()
-        apf.translate_xml_to_hive(self.xml_fn,self.hive)
+        apf.translate_xml_to_h5(self.xml_fn,self.h5)
         
-        n_vol = self.hive.get('/config/n_vol')[()]
-        n_slow = self.hive.get('/config/n_slow')[()]
-        n_fast = self.hive.get('/config/n_fast')[()]
-        n_depth = self.hive.get('/config/n_depth')[()]
+        n_vol = self.h5.get('/config/n_vol')[()]
+        n_slow = self.h5.get('/config/n_slow')[()]
+        n_fast = self.h5.get('/config/n_fast')[()]
+        n_depth = self.h5.get('/config/n_depth')[()]
 
-        #raw_store = self.hive.make('raw_data',(n_vol,n_slow,n_fast,n_depth),dtype='u2')
-        raw_store = np.zeros((n_vol,n_slow,n_fast,n_depth),dtype='u2')
-        
+        raw_store = self.h5.make('raw_data',(n_vol,n_slow,n_fast,n_depth),dtype='u2')
+
         with open(self.raw_data_filename,'rb') as fid:
             for vol_index in range(n_vol):
                 position = vol_index * n_depth * n_fast * n_slow * ocfg.raw_bytes_per_pixel
@@ -179,22 +177,21 @@ class Dataset:
                 vol = np.fromfile(fid,dtype=np.uint16,count=n_slow*n_depth*n_fast)
                 vol = vol.reshape(n_slow,n_fast,n_depth)
                 raw_store[vol_index,:,:,:] = vol
-        self.hive['raw_data'] = raw_store
-        
+
         p = ocfg.source_spectra[system_label] # polynomial for generating dataset's pixel->lambda function
         
         self.L = np.polyval(p,np.arange(n_depth))
         self.k_in = (2.0*np.pi)/self.L
         self.k_out = np.linspace(self.k_in[0],self.k_in[-1],n_depth)
 
-        self.hive.put('L',self.L)
-        self.hive.put('k_in',self.k_in)
-        self.hive.put('k_out',self.k_out)
-        self.hive.put('system_label',system_label)
+        self.h5.put('L',self.L)
+        self.h5.put('k_in',self.k_in)
+        self.h5.put('k_out',self.k_out)
+        self.h5.put('system_label',system_label)
 
-        #self.hive.put('dispersion/coefficients',[0.0,0.0])
+        #self.h5.put('dispersion/coefficients',[0.0,0.0])
         
-        self.ecc_to_hive()
+        self.ecc_to_h5()
         self.make_ids()
                 
 def test():

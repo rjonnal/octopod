@@ -5,15 +5,15 @@ from scipy import interpolate,optimize
 import octopod_config as ocfg
 import logging,sys
 from octopod.Processor import process
-from octopod.DataStore import Hive
+from octopod.DataStore import H5
 
 class DispersionOptimizer:
 
-    def __init__(self,hive):
-        if type(hive)==str:
-            self.hive = Hive(hive)
+    def __init__(self,h5):
+        if type(h5)==str:
+            self.h5 = H5(h5)
         else:
-            self.hive = hive
+            self.h5 = h5
         self.logger = logging.getLogger(__name__)
         self.logger.info('Creating DispersionOptimizer object.')
         #self.Ns = 21
@@ -25,11 +25,11 @@ class DispersionOptimizer:
 
         logs = []
         log_names = []
-        for key in self.hive.get('dispersion/logs').keys():
-            logs.append(self.hive.get('dispersion/logs/%s'%key))
+        for key in self.h5.get('dispersion/logs').keys():
+            logs.append(self.h5.get('dispersion/logs/%s'%key))
             log_names.append(key)
         try:
-            coefs = self.hive.get('dispersion/coefficients')
+            coefs = self.h5.get('dispersion/coefficients')
         except Exception as e:
             self.logger.info(e)
 
@@ -56,7 +56,7 @@ class DispersionOptimizer:
             plot(log,log_name)
 
         if save:
-            outfn = self.hive.filename.replace('.hdf5','')+'_dispersion_optimization.png'
+            outfn = self.h5.filename.replace('.hdf5','')+'_dispersion_optimization.png'
             plt.savefig(outfn)
             plt.pause(1)
             plt.close()
@@ -66,14 +66,14 @@ class DispersionOptimizer:
     def make_test_frame(self,size=1000):
         self.logger.info('Generating a random test frame from raw data.')
         
-        n_depth = self.hive.get('/config/n_depth')[()]
-        n_fast = self.hive.get('/config/n_fast')[()]
-        n_slow = self.hive.get('/config/n_slow')[()]
-        n_vol = self.hive.get('/config/n_vol')[()]
+        n_depth = self.h5.get('/config/n_depth')[()]
+        n_fast = self.h5.get('/config/n_fast')[()]
+        n_slow = self.h5.get('/config/n_slow')[()]
+        n_vol = self.h5.get('/config/n_vol')[()]
 
         test_frame = np.zeros((size,n_depth))
-        hypercube = np.zeros(self.hive.get('raw_data').shape)
-        hypercube[...] = self.hive.get('raw_data')[...]
+        hypercube = np.zeros(self.h5.get('raw_data').shape)
+        hypercube[...] = self.h5.get('raw_data')[...]
         for k in range(size):
             v = np.random.randint(n_vol)
             s = np.random.randint(n_slow-20)+10
@@ -84,8 +84,8 @@ class DispersionOptimizer:
 
     def process_frame(self,frame,c):
         test_frame = frame.copy()
-        k_in = self.hive.get('k_in')
-        k_out = self.hive.get('k_out')
+        k_in = self.h5.get('k_in')
+        k_out = self.h5.get('k_out')
         test_frame = process(frame,k_in,k_out,c)[:-ocfg.dc_cutoff,:]
         return test_frame
         
@@ -151,12 +151,13 @@ class DispersionOptimizer:
         objective_value = obj(result)
 
         if not dry_run:
-            self.hive.put('dispersion/coefficients',np.array(c))
-            self.hive.put('dispersion/objective_value',objective_value)
-            self.hive.put('dispersion/bounds3',np.array(bounds3))
-            self.hive.put('dispersion/bounds2',np.array(bounds2))
-            self.hive.put('dispersion/logs/coarse',np.array(coarse_log))
-            self.hive.put('dispersion/logs/fine',np.array(fine_log))
+            self.h5.require_group('dispersion')
+            self.h5.put('dispersion/coefficients',np.array(c))
+            self.h5.put('dispersion/objective_value',objective_value)
+            self.h5.put('dispersion/bounds3',np.array(bounds3))
+            self.h5.put('dispersion/bounds2',np.array(bounds2))
+            self.h5.put('dispersion/logs/coarse',np.array(coarse_log))
+            self.h5.put('dispersion/logs/fine',np.array(fine_log))
         self.logger.info('optimized coefficients: %0.2e, %0.2e'%(result[0],result[1]))
         return c
     

@@ -262,13 +262,23 @@ class Hive(DataStore):
     def get(self,location):
         return self[location]
 
+    def delete(self,location):
+        path_to_delete = os.path.join(self.root_location,location)
+        if os.path.exists(path_to_delete+'.npy'):
+            os.remove(path_to_delete)
+            self.logger.info('Removing file %s.'%(path_to_delete+'.npy'))
+        elif os.path.exists(path_to_delete):
+            shutil.rmtree(path_to_delete)
+            self.logger.info('Removing subdirectory %s.'%path_to_delete)
+            
+        
     def __getitem__(self,key):
         if key[0]=='/':
             key = key[1:]
         fn = os.path.join(self.root_location,key)+'.npy'
 
         if os.path.exists(fn):
-            print 'data exists at %s'%(fn)
+            #print 'data exists at %s'%(fn)
             return np.load(fn)
         else:
             print 'creating new hive at %s'%key

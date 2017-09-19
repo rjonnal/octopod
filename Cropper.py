@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from scipy.ndimage.morphology import grey_opening
 from scipy.ndimage.filters import median_filter
 from utils import translation,translation1,autotrim_bscan,find_peaks,shear,Clock,lateral_smooth_3d,polyfit2d,polyval2d
-from octopod.Misc import H5
+from octopod.DataStore import H5
 import octopod_config as ocfg
 import logging
 logging.basicConfig(level=logging.DEBUG)
