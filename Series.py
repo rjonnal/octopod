@@ -42,31 +42,51 @@ class Cone:
 
         if do_plot:
             plt.figure()
-        def gmm(x,x0,x1,s0,s1,a0,a1):
-            XX0 = np.arange(len(x)) - x0
-            XX1 = np.arange(len(x)) - x1
-            y0 = np.exp(-(XX0**2)/(2*s0**2))*a0
-            y1 = np.exp(-(XX1**2)/(2*s1**2))*a1
+
+
+        if len(self.prof)>9:
+            testprof = self.prof
+        else:
+            testprof = np.random.randn(10)
+            testprof[:len(self.prof)] = self.prof
+            
+        def gmm(x,x00,x0mid,x01,s0,smid,s1,a0,amid,a1):
+            fit = np.zeros(len(x))
+            
+            x0vec = [x00,x0mid,x01]
+            svec = [s0,smid,s1]
+            avec = [a0,amid,a1]
+            
+            for x0,s,a in zip(x0vec,svec,avec):
+                XX0 = np.arange(len(x)) - x0
+                fit = fit+np.exp(-(XX0**2)/(2*s**2))*a
             if do_plot:
                 plt.cla()
-                plt.plot(x,y0+y1)
-                plt.plot(x,self.prof)
-                plt.pause(.0001)
-            return y0+y1
+                plt.plot(x,fit,lw=2)
+                plt.plot(x,testprof,lw=2)
+                plt.pause(.00000001)
+            return fit
 
         # initial guess:
-        p_a0 = self.prof[self.iidx]
-        p_a1 = self.prof[self.cidx]
+        p_a0 = testprof[self.iidx]
+        p_a1 = testprof[self.cidx]
+        p_amid = 0.0
+        
         p_s0 = 1.0
         p_s1 = 1.0
+        p_smid = 1.0
+        
         p_x0 = self.iidx
         p_x1 = self.cidx
-        p = [p_x0,p_x1,p_s0,p_s1,p_a0,p_a1]
-        lower = [p_x0-1.0,p_x1-1.0,0.1,0.1,p_a0*.75,p_a1*.75]
-        upper = [p_x0+1.0,p_x1+1.0,3.0,3.0,p_a0*1.25,p_a1*1.25]
+        p_xmid = (p_x0+p_x1)/2.0
+        
+        
+        p = [p_x0,p_xmid,p_x1,p_s0,p_smid,p_s1,p_a0,p_amid,p_a1]
+        #lower = [p_x0-1.0,p_x1-1.0,0.1,0.1,p_a0*.75,p_a1*.75]
+        #upper = [p_x0+1.0,p_x1+1.0,3.0,3.0,p_a0*1.25,p_a1*1.25]
         #bounds = (lower,upper)
         
-        aa,bb = curve_fit(gmm,np.arange(len(self.prof)),self.prof,p0=p)
+        aa,bb = curve_fit(gmm,np.arange(len(testprof)),testprof,p0=p,ftol=.0001)
         
         if do_plot:
             plt.close()
@@ -131,10 +151,10 @@ class Series:
                 y = self.hive['/frames'][fk][ik]['y_shifts'][:]
                 c = self.hive['/frames'][fk][ik]['correlations'][:]
                 g = self.hive['/frames'][fk][ik]['goodnesses'][:]
-
+                
                 model_profile = dataset_h5['model/profile'][:]
-                model_isos = dataset_h5['model/labels/ISOS']
-                model_cost = dataset_h5['model/labels/COST']
+                model_isos = dataset_h5['model/labels/ISOS'].value
+                model_cost = dataset_h5['model/labels/COST'].value
                 yramp = np.arange(len(y)) - y
                 # yramp[n] is now the location of the nth target row in the reference space
                 # so we need to find n such that yramp[n]-pty is minimized
@@ -230,17 +250,14 @@ class Series:
                             print e
                             fit,fit_covar = c.gaussian_mixture_model(True)
                             
-                        fit_isos_z,fit_cost_z,fit_isos_sigma,fit_cost_sigma,fit_isos_amplitude,fit_cost_amplitude = fit
+                        fit_isos_z,_,fit_cost_z,fit_isos_sigma,_,fit_cost_sigma,fit_isos_amplitude,_,fit_cost_amplitude = fit
                         
                         perr = np.sqrt(np.diag(fit_covar))
-                        fit_isos_z_error,fit_cost_z_error,fit_isos_sigma_error,fit_cost_sigma_error,fit_isos_amplitude_error,fit_cost_amplitude_error = perr
+                        fit_isos_z_error,_,fit_cost_z_error,fit_isos_sigma_error,_,fit_cost_sigma_error,fit_isos_amplitude_error,_,fit_cost_amplitude_error = perr
 
                         self.hive.put('%s/x'%key_root,xout)
-                        print 'hi'
                         self.hive.put('%s/y'%key_root,yout)
-                        print 'hi'
                         self.hive.put('%s/isos_z'%key_root,border)
-                        print 'hi'
                         self.hive.put('%s/cost_z'%key_root,border+os_length)
                         self.hive.put('%s/cone_volume'%key_root,sheet)
                         self.hive.put('%s/noise_mean'%key_root,noise_mean)
@@ -1045,7 +1062,7 @@ class Series:
         target,label = self.get_image(filename,vidx,layer_names)
         reference = self.reference
         y,x,g = utils.strip_register(target,reference,oversample_factor,strip_width,do_plot=do_plot,use_gaussian=use_gaussian)
-        
+
         self.hive.put('/frames/%s/x_shifts'%target_tag,x)
         self.hive.put('/frames/%s/y_shifts'%target_tag,y)
         self.hive.put('/frames/%s/goodnesses'%target_tag,g)
@@ -1055,11 +1072,13 @@ class Series:
     def is_registered(self):
         counter = 0
         try:
-            for filename in self.hive['/frames'].keys():
-                for fileindex in self.hive['/frames'][filename].keys():
+            my_frames = self.hive['/frames'].keys()
+            for mf in my_frames:
+                for fileindex in self.hive['/frames'][mf].keys():
                     counter = counter + 1
         except Exception as e:
-            print e
+            print 'foo',e
+            sys.exit()
         return counter
                 
         
@@ -1113,14 +1132,7 @@ class Series:
 
 
     def is_rendered(self):
-        out = True
-        try:
-            test = self.hive['/sum_image']
-        except:
-            out = False
-
-        return out
-
+        return len(self.hive['/sum_image'].keys())
             
     def is_volume_rendered(self):
         out = True
@@ -1171,6 +1183,7 @@ class Series:
                 os.makedirs(frames_directory)
 
         files = self.hive['frames'].keys()
+
         
         sign = -1
         # remember the convention here: x and y shifts are the
@@ -1271,16 +1284,21 @@ class Series:
                 y1 = int(np.round(ys*oversample_factor))
                 y2 = y1 + bsy
 
-                ref_section = embedded_reference[y1:y2,x1:x2].ravel()
-                #eref_std = np.std(ref_section)
+                ref_section = embedded_reference[y1:y2,x1:x2]
+
+                while block.shape[1]>ref_section.shape[1]:
+                    block = block[:,:-1]
+
+                ref_section = ref_section.ravel()
+                
                 corr = np.corrcoef(ref_section,block.ravel())[1,0]
                 correlation_image[y1:y2,x1:x2] = correlation_image[y1:y2,x1:x2] + corr
                 correlation_vector[idx] = corr
                 if corr>correlation_threshold:
                     sum_image[y1:y2,x1:x2] = sum_image[y1:y2,x1:x2] + block
                     counter_image[y1:y2,x1:x2] = counter_image[y1:y2,x1:x2] + 1.0
+                    
             self.hive.put('/frames/%s/%s/correlations'%(filename,k[1]),correlation_vector)
-            print correlation_vector.max(),correlation_vector.min(),correlation_vector.mean()
             if do_plot:
                 temp = counter_image.copy()
                 temp[np.where(temp==0)] = 1.0

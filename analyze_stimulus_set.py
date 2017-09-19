@@ -8,14 +8,14 @@ wdir = '/home/rjonnal/Share/2g_aooct_data/Data/2017.08.09/2.0T_0.0S_f0'
 hive_name = os.path.join(wdir,'reg_14_27_33-2.0T_0.0S_no_stimulus_1_000')
 #fn = os.path.join(wdir,'reg_stim_with_other_2.0T_0.0S_f0_000.hdf5')
 
-s = Series(fn)
+s = Series(hive_name)
 
 try:
     fudge
-    cone_catalog = s.h5['cone_catalog']
+    cone_catalog = s.hive['cone_catalog']
 except Exception as e:
     print e
-    ref = s.h5['reference_frame'][:,:]
+    ref = s.hive['reference_frame'][:,:]
     cx,cy = utils.find_cones(ref,5,do_plot=False)
     cx = np.array(cx)
     cy = np.array(cy)

@@ -22,10 +22,10 @@ class DataStore:
 
     '''
 
-    def __init__(self,filename,mode='w'):
-        self.filename = filename
+    def __init__(self,root_location,mode='w'):
+        self.root_location = root_location
         self.logger = logging.getLogger(__name__)
-        self.logger.info('Creating %s object from %s.'%(self.__class__,filename))
+        self.logger.info('Creating %s object from %s.'%(self.__class__,root_location))
         self.mode = mode
 
     def __getitem__(self,key):
@@ -64,7 +64,7 @@ class DataStore:
         pass
 
     def __str__(self):
-        return 'DataStore object located at %s.'%self.filename
+        return 'DataStore object located at %s.'%self.root_location
 
 
     def make(self,dims):
@@ -83,10 +83,10 @@ class DataStore:
         
 class H5(DataStore):
     
-    def __init__(self,filename,mode='w'):
-        DataStore.__init__(self,filename,mode)
-        self.h5 = h5py.File(filename)
-        self.filename = filename
+    def __init__(self,root_location,mode='w'):
+        DataStore.__init__(self,root_location,mode)
+        self.h5 = h5py.File(root_location)
+        self.root_location = root_location
 
     def move(self,src,dest):
         self.logger.info('move: moving %s -> %s'%(src,dest))
@@ -100,24 +100,24 @@ class H5(DataStore):
         if self.mode.find('w')==-1:
             self.logger.info('Mode is %s; cannot repack. Exiting.'%self.mode)
             sys.exit()
-        newh5fn = self.filename+'.repacked.hdf5'
+        newh5fn = self.root_location+'.repacked.hdf5'
         if os.path.exists(newh5fn):
             self.move(newh5fn,newh5fn+'.garbage')
             
         newh5 = h5py.File(newh5fn)
         for key in self.h5.keys():
             h5py.h5o.copy(self.h5.id,key,newh5.id,key)
-            self.logger.info('repack: Copying %s from %s to %s.'%(key,self.filename,newh5fn))
+            self.logger.info('repack: Copying %s from %s to %s.'%(key,self.root_location,newh5fn))
         
         self.h5.flush()
         newh5.flush()
         newh5.close()
         self.h5.close()
         
-        self.move(self.filename,self.filename+'.repack.backup')
-        self.move(newh5fn,self.filename)
+        self.move(self.root_location,self.root_location+'.repack.backup')
+        self.move(newh5fn,self.root_location)
         
-        self.h5 = h5py.File(self.filename)
+        self.h5 = h5py.File(self.root_location)
         
 
     def keys(self):
@@ -230,8 +230,83 @@ class H5(DataStore):
 class Hive(DataStore):
     
     def __init__(self,root_location,mode='w'):
-        self.logger = logging.getLogger(__name__)
-        self.root_location = root_location
+        DataStore.__init__(self,root_location,mode)
+        self.mode = mode
+        try:
+            os.makedirs(self.root_location)
+            self.logger.info('Creating Hive at %s.'%self.root_location)
+        except Exception as e:
+            if os.path.exists(self.root_location):
+                self.logger.info('Using existing Hive at %s.'%self.root_location)
+            else:
+                sys.exit(e)
+        
+    def has(self,key):
+        return os.path.exists(os.path.join(self.root_location,key+'.npy'))
+    
+    def keys(self):
+        temp = glob.glob(os.path.join(self.root_location,'*'))
+        out = []
+        for t in temp:
+            t = t.replace(self.root_location,'')
+            if t[-4:].lower()=='.npy':
+                t = t[:-4]
+            while t[0]=='/':
+                t = t[1:]
+            out.append(t)
+        return out
+        
+    def put(self,location,data):
+        self[location] = data
+
+    def get(self,location):
+        return self[location]
+
+    def __getitem__(self,key):
+        if key[0]=='/':
+            key = key[1:]
+        fn = os.path.join(self.root_location,key)+'.npy'
+
+        if os.path.exists(fn):
+            print 'data exists at %s'%(fn)
+            return np.load(fn)
+        else:
+            print 'creating new hive at %s'%key
+            return Hive(os.path.join(self.root_location,key))
+
+    def __setitem__(self,location,data):
+        if location[0]=='/':
+            location = location[1:]
+
+        if type(data)==list:
+            data = np.array(data)
+        elif not type(data)==np.ndarray:
+            data = np.array([data])
+            
+        if self.mode.find('w')==-1:
+            self.logger.info('Mode is %s; cannot put. Exiting.'%self.mode)
+            sys.exit()
+
+        fn = os.path.join(self.root_location,location)+'.npy'
+
+        path,shortfn = os.path.split(fn)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        
+        try:
+            os.remove(fn)
+        except Exception as e:
+            self.logger.info(e)
+
+        np.save(fn,data)
+        
+        self.logger.info('Putting %s (%s,%s) into Hive file at %s.'%(type(data),list(data.shape),data.dtype,location))
+        
+        
+class HiveComplex(DataStore):
+    
+    def __init__(self,root_location,mode='w'):
+        DataStore.__init__(self,root_location,mode)
         self.mode = mode
         try:
             os.makedirs(self.root_location)
@@ -287,8 +362,8 @@ class Hive(DataStore):
             return np.load(fn+'.npy')
         else:
             return Hive(fn)
-
-    def put(self,location,data,short_descriptor=None,overwrite=False):
+        
+    def __putitem__(self,location,data,short_descriptor=None,overwrite=False):
         if location[0]=='/':
             location = location[1:]
 
