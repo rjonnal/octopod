@@ -1,4 +1,23 @@
-    def find_corresponding_images_old(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
+                        continue
+
+                        try:
+                            fit,fit_covar = c.gaussian_mixture_model(True)
+                        except Exception as e:
+                            print e
+                            fit,fit_covar = c.gaussian_mixture_model(True)
+                            
+                        fit_isos_z,_,fit_cost_z,fit_isos_sigma,_,fit_cost_sigma,fit_isos_amplitude,_,fit_cost_amplitude = fit
+                        
+                        perr = np.sqrt(np.diag(fit_covar))
+                        fit_isos_z_error,_,fit_cost_z_error,fit_isos_sigma_error,_,fit_cost_sigma_error,fit_isos_amplitude_error,_,fit_cost_amplitude_error = perr
+
+
+
+
+
+
+
+def find_corresponding_images_old(self,points,minimum_goodness=10.0,output_radius=2,match_radius=2.0,do_plot=False):
         
         fkeys = self.h5['/frames'].keys()
         for fk in fkeys:

@@ -38,6 +38,53 @@ class Cone:
         self.properties = properties
         self.prof = np.mean(np.mean(np.abs(vol),1),0)
 
+
+    def gfunc(self,x,x0,s,a):
+        XX = np.arange(len(x)) - x0
+        g = np.exp(-(XX)**2/(2*s**2))*a
+        return g
+
+    def gaussian_fit(self,xvec,yvec):
+        x = np.argmax(yvec)
+        a = np.max(yvec)
+        s = 1.0
+        p = [x,s,a]
+        try:
+            params,errs = curve_fit(self.gfunc,xvec,yvec,p0=p,ftol=.01)
+        except Exception as e:
+            params = p
+        return params
+        
+    def isos_subpixel(self,bias=None):
+        if bias is None:
+            bias = np.min(self.prof)
+        #bias = 0.0
+        prof = self.prof - bias
+        ileft,iright = utils.peak_edges(prof,self.iidx)
+        prof[:ileft] = 0.0
+        prof[iright:] = 0.0
+        x,s,a = self.gaussian_fit(np.arange(len(prof)),prof)
+        a = a+bias
+        #plt.plot(self.prof)
+        #plt.plot(self.gfunc(np.arange(len(prof)),x,s,a))
+        #plt.show()
+        return x,s,a
+        
+    def cost_subpixel(self,bias=None):
+        if bias is None:
+            bias = np.min(self.prof)
+        #bias = 0.0
+        prof = self.prof - bias
+        ileft,iright = utils.peak_edges(prof,self.cidx)
+        prof[:ileft] = 0.0
+        prof[iright:] = 0.0
+        x,s,a = self.gaussian_fit(np.arange(len(prof)),prof)
+        a = a+bias
+        #plt.plot(self.prof)
+        #plt.plot(self.gfunc(np.arange(len(prof)),x,s,a))
+        #plt.show()
+        return x,s,a
+        
     def gaussian_mixture_model(self,do_plot=False):
 
         if do_plot:
@@ -136,6 +183,16 @@ class Series:
         corresponding to the x and y coordinate of cone centers,
         and identify and crop the corresponding cone out of all
         this Series' volumes."""
+
+
+        vdict = self.get_volume_dictionary()
+
+        nvols = len(vdict.keys())
+        ncones = len(points)
+
+        os_length_sheet = np.zeros((ncones,nvols))
+        isos_intensity_sheet = np.zeros((ncones,nvols))
+        cost_intensity_sheet = np.zeros((ncones,nvols))
         
         fkeys = self.hive['/frames'].keys()
         for fkidx,fk in enumerate(fkeys):
@@ -166,11 +223,12 @@ class Series:
                 border = 3
                 
                 for idx,(ptx,pty) in enumerate(points):
+                    cone_idx = idx
                     print 'frame %d/%d; vol %d/%d; cone %d/%d at %d,%d'%(fkidx+1,len(fkeys),ikidx+1,len(ikeys),idx+1,len(points),ptx,pty)
                     yerr = np.abs(pty-yramp)
                     match_index = np.argmin(yerr)
                     if yerr[match_index]<=match_radius and g[match_index]>minimum_goodness:
-                        print 'match exists'
+                        #print 'match exists'
                         # get the target coordinates, and then ascend the target en face projection
                         # to the peak (center) of the cone:
                         yout = int(match_index)
@@ -241,19 +299,10 @@ class Series:
                         os_length = cost_guess-isos_guess
                         key_root = '/cone_catalog/%s/%s/%s'%(point_string,fk,ik)
 
-
                         c = Cone(sheet,border,border+os_length,ptx,pty)
 
-                        try:
-                            fit,fit_covar = c.gaussian_mixture_model(True)
-                        except Exception as e:
-                            print e
-                            fit,fit_covar = c.gaussian_mixture_model(True)
-                            
-                        fit_isos_z,_,fit_cost_z,fit_isos_sigma,_,fit_cost_sigma,fit_isos_amplitude,_,fit_cost_amplitude = fit
-                        
-                        perr = np.sqrt(np.diag(fit_covar))
-                        fit_isos_z_error,_,fit_cost_z_error,fit_isos_sigma_error,_,fit_cost_sigma_error,fit_isos_amplitude_error,_,fit_cost_amplitude_error = perr
+                        isos_z,isos_s,isos_a = c.isos_subpixel(bias=noise_mean)
+                        cost_z,cost_s,cost_a = c.cost_subpixel(bias=noise_mean)
 
                         self.hive.put('%s/x'%key_root,xout)
                         self.hive.put('%s/y'%key_root,yout)
@@ -266,19 +315,39 @@ class Series:
                         self.hive.put('%s/full_volume_std'%key_root,full_volume_std)
                         self.hive.put('%s/full_profile_mean'%key_root,full_profile_mean)
                         self.hive.put('%s/full_profile_std'%key_root,full_profile_std)
-                        self.hive.put('%s/fit/isos_z'%key_root,fit_isos_z)
-                        self.hive.put('%s/fit/cost_z'%key_root,fit_cost_z)
-                        self.hive.put('%s/fit/isos_sigma'%key_root,fit_isos_sigma)
-                        self.hive.put('%s/fit/cost_sigma'%key_root,fit_cost_sigma)
-                        self.hive.put('%s/fit/isos_amplitude'%key_root,fit_isos_amplitude)
-                        self.hive.put('%s/fit/cost_amplitude'%key_root,fit_cost_amplitude)
-                        self.hive.put('%s/fit/isos_z_error'%key_root,fit_isos_z_error)
-                        self.hive.put('%s/fit/cost_z_error'%key_root,fit_cost_z_error)
-                        self.hive.put('%s/fit/isos_sigma_error'%key_root,fit_isos_sigma_error)
-                        self.hive.put('%s/fit/cost_sigma_error'%key_root,fit_cost_sigma_error)
-                        self.hive.put('%s/fit/isos_amplitude_error'%key_root,fit_isos_amplitude_error)
-                        self.hive.put('%s/fit/cost_amplitude_error'%key_root,fit_cost_amplitude_error)
+                        
+                        self.hive.put('%s/subpixel/isos_z'%key_root,isos_z)
+                        self.hive.put('%s/subpixel/cost_z'%key_root,cost_z)
+                        self.hive.put('%s/subpixel/isos_sigma'%key_root,isos_s)
+                        self.hive.put('%s/subpixel/cost_sigma'%key_root,cost_s)
+                        self.hive.put('%s/subpixel/isos_amplitude'%key_root,isos_a)
+                        self.hive.put('%s/subpixel/cost_amplitude'%key_root,cost_a)
 
+                        vidx = vdict[(fk,ik)]
+                        os_length = cost_z - isos_z
+                        os_length_sheet[cone_idx,vidx] = os_length
+                        isos_intensity_sheet[cone_idx,vidx] = isos_a/full_profile_mean
+                        cost_intensity_sheet[cone_idx,vidx] = cost_a/full_profile_mean
+
+
+            plt.subplot(1,3,1)
+            plt.imshow(os_length_sheet,aspect='normal')
+            plt.colorbar()
+            plt.subplot(1,3,2)
+            plt.imshow(isos_intensity_sheet,aspect='normal')
+            plt.colorbar()
+            plt.subplot(1,3,3)
+            plt.imshow(cost_intensity_sheet,aspect='normal')
+            plt.colorbar()
+            plt.show()
+
+
+            
+            
+        np.save('os_length.npy',os_length_sheet)
+        np.save('isos_intensity.npy',isos_intensity_sheet)
+        np.save('cost_intensity.npy',cost_intensity_sheet)
+        
                         
     def get_n_volumes(self):
         count = 0

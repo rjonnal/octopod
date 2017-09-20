@@ -281,7 +281,7 @@ class Hive(DataStore):
             #print 'data exists at %s'%(fn)
             return np.load(fn)
         else:
-            print 'creating new hive at %s'%key
+            #print 'creating new hive at %s'%key
             return Hive(os.path.join(self.root_location,key))
 
     def __setitem__(self,location,data):
@@ -306,11 +306,12 @@ class Hive(DataStore):
         try:
             os.remove(fn)
         except Exception as e:
-            self.logger.info(e)
+            pass
+            #self.logger.info(e)
 
         np.save(fn,data)
         
-        self.logger.info('Putting %s (%s,%s) into Hive file at %s.'%(type(data),list(data.shape),data.dtype,location))
+        #self.logger.info('Putting %s (%s,%s) into Hive file at %s.'%(type(data),list(data.shape),data.dtype,location))
         
         
 class HiveComplex(DataStore):

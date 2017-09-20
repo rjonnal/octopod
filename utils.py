@@ -1365,10 +1365,31 @@ def ascend2d(im,xstart,ystart,max_travel=3.0,do_plot=False):
             
 
     return xstart,ystart
+
+
+def peak_edges(vec,start):
+    """Return the indices of the start and end of the peak
+    indexed by the variable start."""
+    start = int(start)
+    start = ascend(vec,start)
+    troughs = np.array([0] + list(find_peaks(-vec)) + [len(vec)-1])
+    try:
+        left = np.max(troughs[np.where(troughs<start)])
+    except Exception as e:
+        left = 0
+    try:
+        right = np.min(troughs[np.where(troughs>start)])
+    except Exception as e:
+        right = 0
         
+    return left,right
+    
+        
+
+
 def ascend(vec,start):
-    floor = np.floor
-    ceil = np.ceil
+    floor = lambda x: int(np.floor(x))
+    ceil = lambda x: int(np.ceil(x))
     if vec[floor(start)]>vec[ceil(start)]:
         start = floor(start)
     elif vec[floor(start)]<vec[ceil(start)]:
