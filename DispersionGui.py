@@ -1,4 +1,4 @@
-from PySide import QtGui  # (the example applies equally well to PySide)
+from PyQt5 import QtGui  # (the example applies equally well to PySide)
 import pyqtgraph as pg
 import sys,os
 from octopod import *
@@ -274,13 +274,12 @@ class Window(QtGui.QWidget):
 
 
     def open_file(self,fname=None):
-        
         if fname is None:
             try:
                 fname = QtGui.QFileDialog.getOpenFileName(self, 'Open file',self.working_dir)[0]
-            except:
+            except Exception as e:
                 fname = QtGui.QFileDialog.getOpenFileName(self, 'Open file',ocfg.data_root)[0]
-                
+
         if os.path.exists(fname):
             self.working_dir,junk = os.path.split(fname)
             self.index = 10

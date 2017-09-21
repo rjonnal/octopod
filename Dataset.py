@@ -38,24 +38,45 @@ class Dataset:
         self.hive = Hive(self.hive_fn)
 
 
-    def add_slo_frames(self,flist):
+    def add_slo_frames(self,flist,width=512,height=512,dtype=np.uint16,skipbytes=0,labels=['SLO'],scaling_factor=1,invert=False):
         """Create a Dataset object from a series of SLO frames.
         This method is modeled slightly after Dataset.initialize, below."""
+        
         self.hive.put('/config/n_vol',len(flist))
-        self.hive.put('/config/n_slow',512)
-        self.hive.put('/config/n_fast',512)
+        self.hive.put('/config/n_slow',height)
+        self.hive.put('/config/n_fast',width)
         self.hive.put('/config/n_depth',1)
 
         
-        n_vol = self.hive.get('/config/n_vol')[()]
-        n_slow = self.hive.get('/config/n_slow')[()]
-        n_fast = self.hive.get('/config/n_fast')[()]
+        n_vol = self.hive.get('/config/n_vol')[0]
+        n_slow = self.hive.get('/config/n_slow')[0]
+        n_fast = self.hive.get('/config/n_fast')[0]
 
-        raw_store = self.hive.make('projections/SLO',(n_vol,n_slow,n_fast),dtype='f8')
+        raw_stores = {}
+        for label in labels:
+            raw_stores[label] = np.zeros((n_vol,n_slow,n_fast),dtype=dtype)
 
         for vol_index,f in enumerate(flist):
-            im = sp.misc.imread(f).astype(np.float)
-            raw_store[vol_index,:,:] = im
+            print '%d of %d'%(vol_index+1,n_vol)
+            with open(f,'r') as fid:
+                fid.seek(skipbytes)
+                arr = np.fromfile(fid,dtype=dtype)
+                single_length = n_slow*n_fast
+                full_length = single_length*len(labels)
+                assert len(arr)==full_length
+                for idx,label in enumerate(labels):
+                    x1 = idx*single_length
+                    x2 = x1+single_length
+                    im = np.reshape(arr[x1:x2],(n_slow,n_fast))
+                    raw_stores[label][vol_index,:,:] = im//scaling_factor
+                    
+            
+        for label in labels:
+            rs = raw_stores[label]
+            if invert:
+                rs = rs.max()-rs
+            self.hive.put('projections/%s'%label,rs)
+            
 
     def get_hive_handle(self):
         return self.hive

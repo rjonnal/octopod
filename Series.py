@@ -1118,7 +1118,7 @@ class Series:
         
         
         
-    def add(self,filename,vidx,layer_names=None,overwrite=False,oversample_factor=3,strip_width=3.0,do_plot=False,use_gaussian=True):
+    def add(self,filename,vidx,layer_names=None,overwrite=True,oversample_factor=3,strip_width=3.0,do_plot=False,use_gaussian=False):
         
         print 'Adding %s, volume %d.'%(filename,vidx)
         
@@ -1153,6 +1153,30 @@ class Series:
         
     def get_image(self,filename_stub,vidx,layer_names):
         filename = os.path.join(self.working_directory,filename_stub)
+        target_hive = Hive(filename)
+        
+        if layer_names is None:
+            # if the layer_names list is missing, use the first layer as a default
+            # this seems like okay behavior since most times there's only one projection
+            # anyway
+            layer_names = [target_h5['projections'].keys()[0]]
+
+        label = '_'.join(layer_names)
+
+        if len(layer_names)>1:
+            test = target_hive['projections'][layer_names[0]][vidx,:,:]
+            n_slow,n_fast = test.shape
+            stack = np.zeros((len(layer_names),n_slow,n_fast))
+            for idx,layer_name in enumerate(layer_names):
+                stack[idx,:,:] = target_hive['projections'][layer_name][vidx,:,:]
+            out = np.mean(stack,axis=0)
+            del stack
+        else:
+            out = target_hive['projections'][layer_names[0]][vidx,:,:]    
+        return out,label
+
+    def get_image0(self,filename_stub,vidx,layer_names):
+        filename = os.path.join(self.working_directory,filename_stub)
         target_h5 = H5(filename)
 
         if layer_names is None:
@@ -1174,7 +1198,7 @@ class Series:
         else:
             out = target_h5['projections'][layer_names[0]][vidx,:,:]    
         return out,label
-
+    
     def get_volume(self,filename_stub,vidx,data_block):
         filename = os.path.join(self.working_directory,filename_stub)
         target_h5 = H5(filename)
