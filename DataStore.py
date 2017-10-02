@@ -275,6 +275,7 @@ class Hive(DataStore):
     def __getitem__(self,key):
         if key[0]=='/':
             key = key[1:]
+
         fn = os.path.join(self.root_location,key)+'.npy'
 
         if os.path.exists(fn):

@@ -18,6 +18,16 @@ from scipy.optimize import curve_fit
 from numpy.fft import fft,ifft,fftshift
 from time import time
 import itertools
+import png
+
+
+def pngread(fn):
+    reader = png.Reader(fn)
+    pngdata = reader.read()
+    px_array = np.array(map(np.uint16,pngdata[2]))
+    return px_array
+                            
+
 
 class Clock:
 
@@ -832,7 +842,7 @@ def efficient_strip_register_testing(target,reference,oversample_factor,strip_wi
     return y_peaks,x_peaks,goodnesses
     
         
-def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,use_gaussian=True):
+def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,use_gaussian=True,background_diameter=0):
 
     # this function returns the x and y shifts required to align lines in TARGET
     # to REFERENCE, such that xshift -1 and yshift +2 for a given line means that
@@ -918,6 +928,9 @@ def strip_register(target,reference,oversample_factor,strip_width,do_plot=False,
         centered_xc = np.fft.fftshift(xc)
         centered_xc = (centered_xc.T - np.mean(centered_xc,axis=1)).T
         centered_xc = centered_xc - centered_xc.min()
+
+        if background_diameter:
+            centered_xc = simple_background_subtract(centered_xc,background_diameter)
         
         xcmax = np.max(centered_xc)
         xcmin = np.min(centered_xc)
@@ -1831,7 +1844,12 @@ def grey_open(im,strel=strel()):
     
 def grey_close(im,strel=strel()):
     return morphology.grey_closing(im,structure=strel)
-    
+
+def simple_background_subtract(im,diameter=25):
+    mystrel = strel(diameter=diameter)
+    bg = morphology.grey_opening(im,structure=mystrel)
+    return im-bg+bg.mean()
+
 def background_subtract(im,strel=strel()):
     if len(im.shape)==2:
         bg = morphology.grey_opening(im,structure=strel)
