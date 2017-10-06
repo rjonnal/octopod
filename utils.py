@@ -19,6 +19,12 @@ from numpy.fft import fft,ifft,fftshift
 from time import time
 import itertools
 import png
+import numpngw
+
+def pngwrite(fn,data):
+    dtype = data.dtype
+    assert (dtype==np.uint16 or dtype==np.uint8)
+    numpngw.write_png(fn, np.round(data).astype(dtype))
 
 
 def pngread(fn):
@@ -384,7 +390,7 @@ def find_cones(data,neighborhood_size,nstd=0.0,do_plot=False):
         y_center = (dy.start + dy.stop - 1)/2    
         y.append(y_center+1)
 
-    return x,y
+    return np.array(x,dtype=np.float),np.array(y,dtype=np.float)
 
     
 
