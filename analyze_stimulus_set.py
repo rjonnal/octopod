@@ -15,7 +15,9 @@ try:
     cone_catalog = s.hive['cone_catalog']
 except Exception as e:
     print e
-    ref = s.hive['reference_frame'][:,:]
+    ref = s.hive['reference_frame']
+    print ref
+    
     cx,cy = utils.find_cones(ref,5,do_plot=False)
     cx = np.array(cx)
     cy = np.array(cy)

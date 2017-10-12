@@ -1590,7 +1590,7 @@ class Series:
             self.hive.put('/stack/%s/%06d'%(label,depth_idx),frame)
 
 
-    def crop_stacks(self,label,dry_run=True):
+    def crop_stacks(self,label,dry_run=True,do_plot=False):
         """Using the stack labeled LABEL, crop all substacks
         equivalently."""
 
@@ -1600,8 +1600,8 @@ class Series:
         except Exception as e:
             counter_exists = False
             keys = self.hive['/stack/%s'%label].keys()
-            for k in keys:
-                print k
+            for idx,k in enumerate(keys):
+                print '%d of %d'%(idx+1,len(keys))
                 temp = self.hive.get('/stack/%s/%s'%(label,k))
                 if not counter_exists:
                     counter = np.zeros(temp.shape)
@@ -1610,7 +1610,13 @@ class Series:
             self.hive.put('/stack_counter',counter)
 
         xc,yc,junk = collector([counter],titles=['Please click upper-left and lower-right corners of ROI.'])
-        
+
+        # if the collector comes back with not enough points,
+        # default to the full image dimensions
+        if len(xc<2):
+            xc = [0,counter.shape[1]]
+            yc = [0,counter.shape[0]]
+            
         x1 = int(np.min(xc))
         x2 = int(np.max(xc))
         y1 = int(np.min(yc))
@@ -1622,7 +1628,6 @@ class Series:
         if not dry_run:
             plt.imshow(counter,cmap='gray')
             plt.colorbar()
-            plt.title('Stop execution (Ctrl-C) now if this is incorrect.')
             plt.show()
             print 'Warning: cropping cannot be undone. Be sure this is right before proceeding.'
             ans = raw_input('Continue? [y/N] ')
@@ -1630,11 +1635,14 @@ class Series:
                 return
             if not ans.lower()=='y':
                 return
+
+        if not dry_run:
+            self.hive.put('/stack_counter',counter)
             
         substack_keys = self.hive['/stack/'].keys()
         for k in substack_keys:
             file_keys = self.hive['/stack/%s'%k].keys()
-            for fk in file_keys:
+            for idx,fk in enumerate(file_keys):
                 loc = '/stack/%s/%s'%(k,fk)
                 uncropped = self.hive.get(loc)
                 uy,ux = uncropped.shape
@@ -1642,20 +1650,24 @@ class Series:
                     continue
                 cropped = uncropped[y1:y2,x1:x2]
                 
-                plt.subplot(1,2,1)
-                plt.cla()
-                plt.imshow(uncropped,cmap='gray')
-                plt.subplot(1,2,2)
-                plt.cla()
-                plt.imshow(cropped,cmap='gray')
-                if dry_run:
-                    plt.title('Preview of crop (dry run).')
-                else:
-                    plt.title('Cropping.')
-                    self.hive.put(loc,cropped)
-                plt.pause(.00000001)
-
-    def average_stack(self,label,redo=False,do_plot=True):
+                if do_plot or dry_run:
+                    plt.subplot(1,2,1)
+                    plt.cla()
+                    plt.imshow(uncropped,cmap='gray')
+                    plt.subplot(1,2,2)
+                    plt.cla()
+                    plt.imshow(cropped,cmap='gray')
+                    if dry_run:
+                        plt.title('Preview of crop (dry run).')
+                        plt.pause(.00000001)
+                        continue
+                    else:
+                        plt.title('Cropping.')
+                        plt.pause(.00000001)
+                self.hive.put(loc,cropped)
+                print '%s: %d of %d'%(k,idx,len(file_keys))
+                
+    def average_stack(self,label,redo=False,do_plot=False):
         # open one image from the stack for testing and setup:
         # use it to see if the images retrieved from the hive
         # are right (i.e. that they're not leftover from an
@@ -1679,6 +1691,7 @@ class Series:
         counter_image = np.zeros((test_sy,test_sx))
         sum_image = np.zeros((test_sy,test_sx))
         for fk in frame_keys:
+            print fk
             im = self.hive.get('/stack/%s/%s'%(label,fk))
             counter_image[np.where(im)] = counter_image[np.where(im)] + 1.0
             sum_image = sum_image + im
@@ -1688,13 +1701,14 @@ class Series:
                 av = sum_image/fixed_counter
                 avmean = av[np.where(av)].mean()
                 av[np.where(av==0)] = avmean
-                plt.subplot(1,2,1)
-                plt.cla()
-                plt.imshow(av,cmap='gray')
-                plt.subplot(1,2,2)
-                plt.cla()
-                plt.imshow(counter_image,cmap='gray')
-                plt.pause(.00001)
+                if do_plot:
+                    plt.subplot(1,2,1)
+                    plt.cla()
+                    plt.imshow(av,cmap='gray')
+                    plt.subplot(1,2,2)
+                    plt.cla()
+                    plt.imshow(counter_image,cmap='gray')
+                    plt.pause(.00001)
 
         fixed_counter = counter_image.copy()
         fixed_counter[np.where(counter_image==0)]=1.0
