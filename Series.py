@@ -1224,6 +1224,12 @@ class Series:
             pass
         return count
 
+    def is_stacked(self):
+        try:
+            junk = self.hive['stack_counter']
+            return True
+        except:
+            return False
 
     def is_rendered(self):
         return len(self.hive['/sum_image'].keys())
@@ -1576,9 +1582,10 @@ class Series:
 
             counter[np.where(counter==0)] = 1.0
             frame = frame/counter
-            plt.cla()
-            plt.imshow(frame,cmap='gray')
-            plt.pause(.0001)
+            if do_plot:
+                plt.cla()
+                plt.imshow(frame,cmap='gray')
+                plt.pause(.0001)
             self.hive.put('/frames/%s/%s/correlations'%(filename,k[1]),correlation_vector)
             self.hive.put('/stack/%s/%06d'%(label,depth_idx),frame)
 
