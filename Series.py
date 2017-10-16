@@ -749,8 +749,6 @@ class Series:
             sys.exit()
 
         
-
-        
     def get_cropper(self,im):
         # return a cropper function that
         # will crop images according to im's

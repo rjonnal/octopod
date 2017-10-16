@@ -1,5 +1,8 @@
-import numpy as np
+import matplotlib
+#matplotlib.use('Qt5Agg')
+matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
+import numpy as np
 import sys,os
 import h5py
 
