@@ -35,6 +35,58 @@ def pngread(fn):
                             
 
 
+def aviread(fn,fps=30):
+    FFMPEG_BIN = "ffmpeg" # on Linux ans Mac OS
+    # need to do something like this:
+    # ffmpeg -i INT.avi -r 10 -f image2 image-%07d.pn
+    d,f = os.path.split(fn)
+    tmpdir = os.path.join(d,'%s_frames'%(f))
+    
+    if os.path.exists(tmpdir):
+        try:
+            for f in glob.glob(os.path.join(tmpdir,'*.png')):
+                os.remove(f)
+        except:
+            pass
+    else:
+        try:
+            os.mkdir(tmpdir)
+        except Exception as e:
+            print e
+            sys.exit(e)
+
+    pattern = os.path.join(tmpdir,'frame_%07d.png')
+    command = [ FFMPEG_BIN,
+                '-i', fn,
+                '-r', '%d'%fps,
+                '-f', 'image2',
+                '%s'%pattern ]
+    
+    sp.call(command)
+
+    stack = []
+    idx = 1
+    while True:
+        print 'Loading frame %d.'%idx
+        try:
+            im = pngread(os.path.join(tmpdir,'frame_%07d.png'%idx))
+        except Exception as e:
+            print e
+            break
+        # flip the image here: we'll always assume that the B-scan is upright
+        stack.append(np.flipud(im))
+        idx+=1
+    stack = np.array(stack)
+    # clean up
+    try:
+        for f in glob.glob(os.path.join(tmpdir,'*.png')):
+            os.remove(f)
+        os.rmdir(tmpdir)
+    except:
+        pass
+    
+    return stack
+
 class Clock:
 
     def tick(self):
@@ -475,13 +527,14 @@ def laps(im,axis=1,kind='linear'):
 
 
 def gaussian_convolve(im,sigma,mode='same'):
-    
-    kernel_width = np.ceil(sigma*8) # 4 standard deviations gets pretty close to zero
-    vec = np.arange(kernel_width)-kernel_width/2.0
-    XX,YY = np.meshgrid(vec,vec)
-
-    g = np.exp(-(XX**2+YY**2)/2.0/sigma**2)
-    return fftconvolve(im,g,mode=mode)/np.sum(g)
+    if not sigma:
+        return im
+    else:
+        kernel_width = np.ceil(sigma*8) # 4 standard deviations gets pretty close to zero
+        vec = np.arange(kernel_width)-kernel_width/2.0
+        XX,YY = np.meshgrid(vec,vec)
+        g = np.exp(-(XX**2+YY**2)/2.0/sigma**2)
+        return fftconvolve(im,g,mode=mode)/np.sum(g)
 
 
 def phase_diff(im1,im2):
