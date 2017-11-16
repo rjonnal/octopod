@@ -526,14 +526,14 @@ def laps(im,axis=1,kind='linear'):
     return ps,freq
 
 
-def gaussian_convolve(im,sigma,mode='same'):
+def gaussian_convolve(im,sigma,mode='same',hscale=1.0,vscale=1.0):
     if not sigma:
         return im
     else:
         kernel_width = np.ceil(sigma*8) # 4 standard deviations gets pretty close to zero
         vec = np.arange(kernel_width)-kernel_width/2.0
         XX,YY = np.meshgrid(vec,vec)
-        g = np.exp(-(XX**2+YY**2)/2.0/sigma**2)
+        g = np.exp(-((XX/hscale)**2+(YY/vscale)**2)/2.0/sigma**2)
         return fftconvolve(im,g,mode=mode)/np.sum(g)
 
 
@@ -1460,6 +1460,7 @@ def peak_edges(vec,start):
 
 
 def ascend(vec,start):
+    start = int(start)
     floor = lambda x: int(np.floor(x))
     ceil = lambda x: int(np.ceil(x))
     if vec[floor(start)]>vec[ceil(start)]:
