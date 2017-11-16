@@ -20,6 +20,7 @@ from time import time
 import itertools
 import png
 import numpngw
+import subprocess as sp
 
 def pngwrite(fn,data):
     dtype = data.dtype
@@ -33,14 +34,12 @@ def pngread(fn):
     px_array = np.array(map(np.uint16,pngdata[2]))
     return px_array
                             
-
-
 def aviread(fn,fps=30):
     FFMPEG_BIN = "ffmpeg" # on Linux ans Mac OS
     # need to do something like this:
     # ffmpeg -i INT.avi -r 10 -f image2 image-%07d.pn
     d,f = os.path.split(fn)
-    tmpdir = os.path.join(d,'%s_frames'%(f))
+    tmpdir = os.path.join('/tmp','%s_frames'%(f))
     
     if os.path.exists(tmpdir):
         try:
@@ -70,8 +69,8 @@ def aviread(fn,fps=30):
         print 'Loading frame %d.'%idx
         try:
             im = pngread(os.path.join(tmpdir,'frame_%07d.png'%idx))
-        except Exception as e:
-            print e
+        except IOError as e:
+            print 'All files loaded.'
             break
         # flip the image here: we'll always assume that the B-scan is upright
         stack.append(np.flipud(im))
@@ -79,11 +78,12 @@ def aviread(fn,fps=30):
     stack = np.array(stack)
     # clean up
     try:
-        for f in glob.glob(os.path.join(tmpdir,'*.png')):
+        for f in glob(os.path.join(tmpdir,'*.png')):
             os.remove(f)
         os.rmdir(tmpdir)
-    except:
-        pass
+    except Exception as e:
+        print 'could not clean up!'
+        print e
     
     return stack
 
