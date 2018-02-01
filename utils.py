@@ -11,6 +11,7 @@ import hashlib
 from matplotlib import pyplot as plt
 from scipy.ndimage import morphology
 from scipy.ndimage import filters
+from scipy.ndimage.measurements import watershed_ift
 from scipy import ndimage
 from scipy import signal
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -32,6 +33,12 @@ def pngread(fn):
     reader = png.Reader(fn)
     pngdata = reader.read()
     px_array = np.array(map(np.uint16,pngdata[2]))
+    return px_array
+                            
+def colorpngread(fn):
+    reader = png.Reader(fn)
+    pngdata = reader.read()
+    px_array = np.array(map(np.uint8,pngdata[2]))
     return px_array
                             
 def aviread(fn,fps=30):
@@ -314,7 +321,6 @@ def translation(im0in, im1in, xlims=None, ylims=None, debug=False):
     frac = num/denom
 
     ir = np.abs(np.fft.ifft2(frac))
-
     goodness = np.max(ir)
     ty, tx = np.unravel_index(np.argmax(ir), shape)
     if debug:
@@ -412,7 +418,12 @@ def find_cones(data,neighborhood_size,nstd=0.0,do_plot=False):
     #XX,YY = np.meshgrid(np.arange(-rad_ceil,rad_ceil+1),np.arange(-rad_ceil,rad_ceil+1))
     #d = np.sqrt(XX**2+YY**2)
     #neighborhood = np.zeros(d.shape)
+
     #neighborhood[np.where(d<=neighborhood_radius)] = 1.0
+
+    ymax,xmax = data.shape
+    ymax = ymax-1
+    xmax = xmax-1
     
     data_max = filters.maximum_filter(data, neighborhood_size)
     if do_plot:
@@ -442,8 +453,79 @@ def find_cones(data,neighborhood_size,nstd=0.0,do_plot=False):
         y_center = (dy.start + dy.stop - 1)/2    
         y.append(y_center+1)
 
-    return np.array(x,dtype=np.float),np.array(y,dtype=np.float)
+    return np.clip(np.array(x,dtype=np.float),0,xmax),np.clip(np.array(y,dtype=np.float),0,ymax)
 
+def find_cone_regions(data,neighborhood_size,nstd=0.0,do_plot=False):
+    threshold = nstd*np.std(data)
+    
+    ymax,xmax = data.shape
+    ymax = ymax-1
+    xmax = xmax-1
+    
+    data_max = filters.maximum_filter(data, neighborhood_size)
+    data_med = filters.median_filter(data, neighborhood_size)
+
+    data_smoothed = data.copy()
+    for k in range(15):
+        data_smoothed = gaussian_blur(data_smoothed,0.2)
+
+
+    plt.figure()
+    plt.imshow(data[:50,:50])
+    plt.figure()
+    plt.imshow(data_smoothed[:50,:50])
+    plt.show()
+
+    clipped = np.zeros(data_max.shape)
+    clipped[np.where(data_smoothed>data_med*1.01)] = 1.0#data_max[np.where(data_smoothed>data_med)]
+    
+    #clipped = gaussian_blur(clipped,0.5)
+    
+    plt.imshow(clipped)
+    plt.show()
+    sys.exit()
+    
+    if do_plot:
+        clim = np.percentile(data,(5,99))
+        plt.figure()
+        plt.imshow(data,cmap='gray',interpolation='none',clim=clim)
+        plt.colorbar()
+        plt.figure()
+        plt.imshow(data_max,cmap='gray',interpolation='none')
+        plt.colorbar()
+
+    maxima = (data == data_max)
+    data_min = filters.minimum_filter(data, neighborhood_size)
+    diff = ((data_max - data_min) > threshold)
+    maxima[diff == 0] = 0
+    
+    labeled, num_objects = ndimage.label(maxima)
+
+    #ac = np.abs(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(data)*np.conj(np.fft.fft2(data)))))
+    #plt.imshow(ac)
+    #plt.show()
+    ws_data = data
+    ws_data = np.uint16(np.round((ws_data-ws_data.min())/(ws_data.max()-ws_data.min())))
+    ws = watershed_ift(ws_data,markers=labeled)
+    plt.imshow(ws)
+    plt.show()
+    
+    slices = ndimage.find_objects(labeled)
+    print slices
+    print dir(slices)
+    print dir(slices[0])
+    sys.exit()
+    
+    x, y = [], []
+    for dy,dx in slices:
+        x_center = (dx.start + dx.stop - 1)/2
+        x.append(x_center+1)
+        y_center = (dy.start + dy.stop - 1)/2    
+        y.append(y_center+1)
+
+    return np.clip(np.array(x,dtype=np.float),0,xmax),np.clip(np.array(y,dtype=np.float),0,ymax)
+
+    
     
 
 def find_peaks(prof,intensity_threshold=-np.inf,gradient_threshold=-np.inf):
