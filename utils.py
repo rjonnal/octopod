@@ -1541,7 +1541,7 @@ def peak_edges(vec,start):
         
 
 
-def ascend(vec,start):
+def ascend(vec,start,do_plot=False):
     start = int(start)
     floor = lambda x: int(np.floor(x))
     ceil = lambda x: int(np.ceil(x))
@@ -1564,6 +1564,12 @@ def ascend(vec,start):
     except Exception as e:
         print e
 
+    if do_plot:
+        plt.plot(vec)
+        plt.plot(start,vec[start],'go')
+        plt.plot(out,vec[out],'ro')
+        plt.show()
+        
     return int(out)
 
 def descend(vec,start):
