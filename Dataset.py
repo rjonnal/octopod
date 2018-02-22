@@ -179,10 +179,10 @@ class Dataset:
         apf = AcquisitionParameterFile()
         apf.translate_xml_to_hive(self.xml_fn,self.hive)
         
-        n_vol = self.hive.get('/config/n_vol')[()]
-        n_slow = self.hive.get('/config/n_slow')[()]
-        n_fast = self.hive.get('/config/n_fast')[()]
-        n_depth = self.hive.get('/config/n_depth')[()]
+        n_vol = int(self.hive.get('/config/n_vol')[()])
+        n_slow = int(self.hive.get('/config/n_slow')[()])
+        n_fast = int(self.hive.get('/config/n_fast')[()])
+        n_depth = int(self.hive.get('/config/n_depth')[()])
 
         #raw_store = self.hive.make('raw_data',(n_vol,n_slow,n_fast,n_depth),dtype='u2')
         raw_store = np.zeros((n_vol,n_slow,n_fast,n_depth),dtype='u2')
