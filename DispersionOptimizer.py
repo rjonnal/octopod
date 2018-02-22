@@ -66,10 +66,10 @@ class DispersionOptimizer:
     def make_test_frame(self,size=1000):
         self.logger.info('Generating a random test frame from raw data.')
         
-        n_depth = self.hive.get('/config/n_depth')[()]
-        n_fast = self.hive.get('/config/n_fast')[()]
-        n_slow = self.hive.get('/config/n_slow')[()]
-        n_vol = self.hive.get('/config/n_vol')[()]
+        n_depth = int(self.hive.get('/config/n_depth')[()])
+        n_fast = int(self.hive.get('/config/n_fast')[()])
+        n_slow = int(self.hive.get('/config/n_slow')[()])
+        n_vol = int(self.hive.get('/config/n_vol')[()])
 
         test_frame = np.zeros((size,n_depth))
         hypercube = np.zeros(self.hive.get('raw_data').shape)
